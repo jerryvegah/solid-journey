@@ -52,6 +52,9 @@ export default function ContractsPage() {
                 mapInstance.current = null;
             }
 
+            // FIX: Add null check for mapRef.current before using it
+            if (!mapRef.current) return;
+
             try {
                 // @ts-ignore
                 const L = (await import('leaflet')).default;
@@ -67,6 +70,7 @@ export default function ContractsPage() {
                 const centerLat = lats.reduce((a: number, b: number) => a + b, 0) / lats.length;
                 const centerLng = lngs.reduce((a: number, b: number) => a + b, 0) / lngs.length;
 
+                // FIX: Now TypeScript knows mapRef.current is not null
                 const map = L.map(mapRef.current, {
                     center: [centerLat, centerLng],
                     zoom: 14,

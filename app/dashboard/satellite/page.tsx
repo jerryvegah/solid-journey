@@ -414,6 +414,7 @@ function ReportDetailsModal({ report, onClose }: { report: any, onClose: () => v
     useEffect(() => {
         let L: any;
         const initMap = async () => {
+            // FIX: Add null check for mapRef.current
             if (!mapRef.current || mapInstance.current) return;
             try {
                 // @ts-ignore
@@ -422,6 +423,7 @@ function ReportDetailsModal({ report, onClose }: { report: any, onClose: () => v
                 // Parse coordinates for center point
                 const [lat, lng] = report.coordinates.split(',').map((s: string) => parseFloat(s.trim()));
 
+                // FIX: Now TypeScript knows mapRef.current is not null
                 const map = L.map(mapRef.current, {
                     center: [lat, lng],
                     zoom: 14,

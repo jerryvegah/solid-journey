@@ -45,6 +45,12 @@ export interface FarmerContract {
  */
 export async function getInputPackages(): Promise<InputPackage[]> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return [];
+        }
+
         console.log('📡 Fetching active InputPackages...');
         const packagesRef = collection(db, 'InputPackages');
 
@@ -72,7 +78,6 @@ export async function getInputPackages(): Promise<InputPackage[]> {
 
     } catch (error) {
         console.error('❌ Error fetching input packages:', error);
-        // Rethrow or return something that indicates an error
         return [];
     }
 }
@@ -82,6 +87,12 @@ export async function getInputPackages(): Promise<InputPackage[]> {
  */
 export async function getPackageDetails(packageId: string): Promise<InputPackage | null> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return null;
+        }
+
         const packageRef = doc(db, 'InputPackages', packageId);
         const packageDoc = await getDoc(packageRef);
 
@@ -103,6 +114,12 @@ export async function getPackageDetails(packageId: string): Promise<InputPackage
  */
 export async function getPackageByCropType(cropType: string): Promise<InputPackage | null> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return null;
+        }
+
         console.log(`🔍 Searching for BNPL package for crop: ${cropType}`);
         const packagesRef = collection(db, 'InputPackages');
 
@@ -155,6 +172,12 @@ export function calculateProduceDue(producePerAcre: number, acres: number): numb
  */
 export async function checkUserHasFarm(userId: string): Promise<{ hasFarm: boolean; farmData?: any }> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return { hasFarm: false };
+        }
+
         const assessmentsRef = collection(db, 'assessments');
         const q = query(assessmentsRef, where('userId', '==', userId));
         const querySnapshot = await getDocs(q);
@@ -197,6 +220,12 @@ export async function createContract(
     expectedHarvestDate: string
 ): Promise<{ success: boolean; contractId?: string; error?: string }> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return { success: false, error: 'Database not initialized' };
+        }
+
         const packageDetails = await getPackageDetails(packageId);
 
         if (!packageDetails) {
@@ -239,6 +268,12 @@ export async function createContract(
  */
 export async function getUserContracts(userId: string): Promise<FarmerContract[]> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return [];
+        }
+
         const contractsRef = collection(db, 'FarmerContracts');
         const q = query(contractsRef, where('farmerId', '==', userId));
         const querySnapshot = await getDocs(q);
@@ -258,6 +293,12 @@ export async function getUserContracts(userId: string): Promise<FarmerContract[]
  */
 export async function getContractById(contractId: string): Promise<FarmerContract | null> {
     try {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            return null;
+        }
+
         const contractRef = doc(db, 'FarmerContracts', contractId);
         const contractDoc = await getDoc(contractRef);
 

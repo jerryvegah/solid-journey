@@ -2,8 +2,8 @@
 
 import { getApps, initializeApp } from "firebase/app";
 import { Auth, getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { Firestore, getFirestore } from "firebase/firestore";
+import { FirebaseStorage, getStorage } from "firebase/storage";
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { useEffect, useState } from 'react';
 
@@ -19,9 +19,9 @@ const firebaseConfig = {
 const isConfigValid = Object.values(firebaseConfig).every(value => value && value.trim() !== '');
 
 let app;
-let auth: Auth;
-let db;
-let storage;
+let auth: Auth | undefined;
+let db: Firestore | undefined;
+let storage: FirebaseStorage | undefined;
 
 if (isConfigValid) {
   app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0];

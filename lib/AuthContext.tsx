@@ -18,6 +18,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // FIX: Add null check for auth
+    if (!auth) {
+      console.error('Firebase Auth not initialized')
+      setLoading(false)
+      return
+    }
+
     // Listen for auth state changes
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser)
@@ -28,6 +35,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [])
 
   async function signInWithGoogle() {
+    // FIX: Add null check for auth
+    if (!auth) {
+      throw new Error('Firebase Auth not initialized')
+    }
+
     const provider = new GoogleAuthProvider()
     const result = await signInWithPopup(auth, provider)
     setUser(result.user)
@@ -35,6 +47,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }
 
   async function logout() {
+    // FIX: Add null check for auth
+    if (!auth) {
+      throw new Error('Firebase Auth not initialized')
+    }
+
     await signOut(auth)
     setUser(null)
   }

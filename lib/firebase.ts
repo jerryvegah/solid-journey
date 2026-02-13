@@ -1,9 +1,11 @@
 "use client";
 
 import { getApps, initializeApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
+import { Auth, getAuth } from "firebase/auth";
 import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
+import { onAuthStateChanged, User } from 'firebase/auth';
+import { useEffect, useState } from 'react';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -17,7 +19,7 @@ const firebaseConfig = {
 const isConfigValid = Object.values(firebaseConfig).every(value => value && value.trim() !== '');
 
 let app;
-let auth;
+let auth: Auth;
 let db;
 let storage;
 
@@ -28,6 +30,28 @@ if (isConfigValid) {
   storage = getStorage(app);
 } else {
   console.warn('Firebase config is incomplete. Make sure all NEXT_PUBLIC_FIREBASE_* environment variables are set.');
+}
+
+// Add the useAuth hook
+export function useAuth() {
+  const [user, setUser] = useState<User | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!auth) {
+      setLoading(false);
+      return;
+    }
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
+  }, []);
+
+  return { user, loading };
 }
 
 export { auth, db, storage };

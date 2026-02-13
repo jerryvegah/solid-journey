@@ -10,7 +10,7 @@ export type Property = {
   bathrooms?: number
   sqft?: number
   features?: string[] // e.g., ["Smart Home", "Gated Security"]
-  [key: string]: any
+  [key: string]: unknown
 }
 
 export type Booking = {

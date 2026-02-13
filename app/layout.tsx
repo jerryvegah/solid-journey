@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Poppins } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const poppins = Poppins({
@@ -25,6 +26,20 @@ export default function RootLayout({
         <script src="https://checkout.flutterwave.com/v3.js" async></script>
       </head>
       <body className={`${poppins.variable} font-sans`}>
+        <Script
+          async
+          src="https://www.googletagmanager.com/gtag/js?id=G-9097WN5K03"
+          strategy="afterInteractive"
+        />
+        <Script id="google-analytics" strategy="afterInteractive" dangerouslySetInnerHTML={{
+          __html: `
+            window.dataLayer = window.dataLayer || [];
+            function gtag(){dataLayer.push(arguments);}
+            gtag('js', new Date());
+
+            gtag('config', 'G-9097WN5K03');
+          `,
+        }} />
         {children}
       </body>
     </html>

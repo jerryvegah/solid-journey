@@ -60,7 +60,7 @@ const translations: Record<string, TranslationKeys> = {
     testi1_text: "Agricheck transformed the way I farm. The financing and inputs came right on time.",
     testi1_author: "John K., Maize Farmer",
     testi2_text: "Satellite mapping helped me understand my land's potential. Highly recommended!",
-    testi2_author: "Mary L., Rice Farmer",
+    testi2_author: "Bright L., Soybean Farmer",
     video_title: "See Agricheck in Action",
     video_desc: "Discover how we are revolutionizing agriculture with technology."
   },
@@ -114,7 +114,7 @@ const translations: Record<string, TranslationKeys> = {
     testi1_text: "Agricheck a transformé ma façon de cultiver. Le financement et les intrants sont arrivés juste à temps.",
     testi1_author: "Jean K., Producteur de Maïs",
     testi2_text: "La cartographie par satellite m'a aidé à comprendre le potentiel de ma terre. Hautement recommandé !",
-    testi2_author: "Marie L., Rizicultrice",
+    testi2_author: "Bright L.,Producteur de soja",
     video_title: "Voir Agricheck en Action",
     video_desc: "Découvrez comment nous révolutionnons l'agriculture grâce à la technologie."
   }
@@ -204,7 +204,7 @@ export default function LandingPage() {
         <h2 className="text-4xl font-bold text-center text-emerald-900 mb-16">{t.audience_title}</h2>
         <div className="grid md:grid-cols-2 gap-8">
           <div className="group relative h-[500px] rounded-3xl overflow-hidden shadow-xl">
-            <Image src="/farm mapping.jpg" alt="Farmers" fill className="object-cover transition-transform group-hover:scale-110 duration-700" />
+            <Image src="https://images.unsplash.com/photo-1625246333195-78d9c38ad449?w=800&h=600&fit=crop" alt="Farmers" fill className="object-cover transition-transform group-hover:scale-110 duration-700" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-10 flex flex-col justify-end text-white">
               <h3 className="text-3xl font-bold mb-4">{t.audience_farmers_title}</h3>
               <p className="text-lg text-emerald-100 font-medium">
@@ -213,7 +213,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="group relative h-[500px] rounded-3xl overflow-hidden shadow-xl">
-            <Image src="/farm mapping.jpg" alt="Investors" fill className="object-cover transition-transform group-hover:scale-110 duration-700" />
+            <Image src="https://images.unsplash.com/photo-1621905252507-b35492cc74b4?w=800&h=600&fit=crop" alt="Investors" fill className="object-cover transition-transform group-hover:scale-110 duration-700" />
             <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent p-10 flex flex-col justify-end text-white">
               <h3 className="text-3xl font-bold mb-4">{t.audience_investors_title}</h3>
               <p className="text-lg text-emerald-100 font-medium">
@@ -290,10 +290,14 @@ export default function LandingPage() {
           <h2 className="text-4xl font-bold text-emerald-900 mb-6">{t.video_title}</h2>
           <p className="text-slate-600 mb-12 max-w-2xl mx-auto">{t.video_desc}</p>
           <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
-            {/* Placeholder for video - you can replace src with actual video URL or use an iframe */}
-            <div className="absolute inset-0 flex items-center justify-center">
-              <i className="fa-solid fa-play-circle text-8xl text-emerald-500/80 hover:text-emerald-500 cursor-pointer transition-all hover:scale-110"></i>
-            </div>
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src="https://www.youtube.com/embed/sNZVqzSBxnY"
+              title="Agricheck Platform Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            ></iframe>
           </div>
         </div>
       </section>

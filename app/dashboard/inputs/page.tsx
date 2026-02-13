@@ -9,7 +9,8 @@ import {
     InputPackage
 } from '@/lib/contracts';
 import { db, useAuth } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import { initiateCheckout } from '@/lib/payment';
+import { addDoc, collection, getDocs, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { CheckCircle2, CreditCard, MapPin, X } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -64,6 +65,49 @@ export default function InputsPage() {
 
         loadProducts();
     }, []);
+
+    // Handle direct "Buy Now" with Flutterwave
+    const handleBuyNow = (product: Product) => {
+        if (!user) {
+            alert('Please sign in to make a purchase');
+            return;
+        }
+
+        initiateCheckout(
+            {
+                email: user.email || '',
+                name: user.displayName || 'Farmer',
+                uid: user.uid
+            },
+            'GHS', // Default to GHS as per request
+            product.price,
+            {
+                title: `Buy ${product.name}`,
+                description: `Purchasing ${product.name} from Agricheck Marketplace`,
+                logo: product.image
+            },
+            async (ref) => {
+                try {
+                    // Record the order in Firestore
+                    await addDoc(collection(db, 'InputOrders'), {
+                        userId: user.uid,
+                        userEmail: user.email,
+                        productName: product.name,
+                        productId: product.id,
+                        amount: product.price,
+                        currency: 'GHS',
+                        paymentRef: ref,
+                        status: 'paid',
+                        createdAt: serverTimestamp()
+                    });
+                    alert(`Success! Your order for ${product.name} has been placed. We will contact you for delivery details.`);
+                } catch (error) {
+                    console.error("Error recording order:", error);
+                    alert("Payment successful, but we failed to record your order. Please contact support with ref: " + ref);
+                }
+            }
+        );
+    };
 
     // Handle Buy on Credit click
     const handleBuyOnCredit = async (product: Product) => {
@@ -231,6 +275,7 @@ export default function InputsPage() {
                                             return (
                                                 <>
                                                     <button
+                                                        onClick={() => handleBuyNow(product)}
                                                         className={`w-full font-bold py-3 rounded-xl transition-colors shadow-md hover:shadow-lg active:scale-95 ${isCurrentlyInStock
                                                             ? 'bg-emerald-500 text-white hover:bg-emerald-600'
                                                             : 'bg-slate-300 text-slate-500 cursor-not-allowed'

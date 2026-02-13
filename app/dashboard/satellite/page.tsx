@@ -1,6 +1,7 @@
 "use client";
 
 import { db, useAuth } from '@/lib/firebase';
+import { initiateCheckout } from '@/lib/payment';
 import {
     BarElement,
     CategoryScale,
@@ -10,7 +11,7 @@ import {
     Title,
     Tooltip,
 } from 'chart.js';
-import { collection, getDocs, query, where } from 'firebase/firestore';
+import { collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet/dist/leaflet.css';
 import { Activity, AlertTriangle, CreditCard, Download, Droplets, Eye, Layers, Lock, MapPin, Satellite, Thermometer, TrendingUp, Wind, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
@@ -33,7 +34,7 @@ function generateRecommendationsArray(data: any) {
     const cropType = data.cropType || data.crop;
     if (!cropType) return ["No recommendations available."];
 
-    const riskData = data.results?.risk_assessment?.[cropType.toUpperCase()];
+    const riskData = data.results?.risk_ml?.risk_assessment?.[cropType.toUpperCase()];
     if (!riskData) return ["No recommendations available."];
 
     const recommendations = [];
@@ -54,18 +55,26 @@ export default function SatelliteReportsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedReport, setSelectedReport] = useState<any>(null);
     const [currentPage, setCurrentPage] = useState(1);
+    const [isPremium, setIsPremium] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pendingReport, setPendingReport] = useState<any>(null);
 
-    // Load user's assessments from Firebase
+    // Load user's assessments and premium status from Firebase
     useEffect(() => {
-        const loadAssessments = async () => {
+        const loadUserData = async () => {
             if (!user) {
                 setLoading(false);
                 return;
             }
 
             try {
+                // 1. Check Premium Status
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    setIsPremium(userDoc.data().isPremium || false);
+                }
+
+                // 2. Load Assessments
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
                 const querySnapshot = await getDocs(q);
@@ -87,7 +96,7 @@ export default function SatelliteReportsPage() {
                         daysAfterPlanting: data.datePlanted ? Math.floor((new Date().getTime() - new Date(data.datePlanted).getTime()) / (1000 * 60 * 60 * 24)) : 0,
                         expectedSeason: 120,
                         peakNDVI: 0.75,
-                        riskLevel: data.results?.risk?.risk_assessment?.[data.cropType?.toUpperCase()]?.risk_level || "Unknown",
+                        riskLevel: data.results?.risk_ml?.risk_assessment?.[data.cropType?.toUpperCase()]?.risk_level || "Unknown",
                         boundaryPoints: data.fieldCoordinates ? JSON.parse(data.fieldCoordinates).length : 0,
                         results: data.results || {}
                     };
@@ -101,7 +110,7 @@ export default function SatelliteReportsPage() {
             }
         };
 
-        loadAssessments();
+        loadUserData();
     }, [user]);
 
     // Load user's status (optional, but keeping it simple for now)
@@ -214,7 +223,11 @@ export default function SatelliteReportsPage() {
 
             {/* Payment Modal */}
             {showPaymentModal && (
-                <PaymentModal onClose={() => { setShowPaymentModal(false); setPendingReport(null); }} />
+                <PaymentModal
+                    user={user}
+                    onClose={() => { setShowPaymentModal(false); setPendingReport(null); }}
+                    onSuccess={() => setIsPremium(true)}
+                />
             )}
         </div>
     );
@@ -303,7 +316,46 @@ function ReportCard({ report, onSelect }: { report: any, onSelect: () => void })
 }
 
 // --- Payment Modal Component ---
-function PaymentModal({ onClose }: { onClose: () => void }) {
+function PaymentModal({ user, onClose, onSuccess }: { user: any, onClose: () => void, onSuccess: () => void }) {
+    const [isProcessing, setIsProcessing] = useState(false);
+
+    const handleUpgrade = () => {
+        if (!user) return;
+
+        setIsProcessing(true);
+        initiateCheckout(
+            {
+                email: user.email || '',
+                name: user.displayName || 'Farmer',
+                uid: user.uid
+            },
+            'GHS',
+            'PREMIUM',
+            {
+                title: "Agricheck Premium",
+                description: "Unlimited Field Assessments & Risk Analysis"
+            },
+            async (ref) => {
+                try {
+                    const userRef = doc(db, 'users', user.uid);
+                    await updateDoc(userRef, {
+                        isPremium: true,
+                        lastPaymentRef: ref,
+                        paidAt: serverTimestamp()
+                    });
+                    onSuccess();
+                    onClose();
+                    alert("Welcome to Premium! Your unlimited access is now active.");
+                } catch (err) {
+                    console.error("Error updating verification:", err);
+                    alert("Payment confirmed, but profile update failed. Please refresh or contact support.");
+                } finally {
+                    setIsProcessing(false);
+                }
+            }
+        );
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>
             <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md" onClick={e => e.stopPropagation()}>
@@ -318,7 +370,6 @@ function PaymentModal({ onClose }: { onClose: () => void }) {
                     </p>
 
                     <div className="bg-slate-50 rounded-xl p-6 mb-6 border border-slate-200">
-                        <h3 className="font-bold text-slate-800 mb-3">Premium Features</h3>
                         <ul className="text-left space-y-2 text-sm text-slate-600">
                             <li className="flex items-start gap-2">
                                 <i className="fa-solid fa-check text-emerald-500 mt-1"></i>
@@ -332,17 +383,17 @@ function PaymentModal({ onClose }: { onClose: () => void }) {
                                 <i className="fa-solid fa-check text-emerald-500 mt-1"></i>
                                 <span>7-day weather forecasts</span>
                             </li>
-                            <li className="flex items-start gap-2">
-                                <i className="fa-solid fa-check text-emerald-500 mt-1"></i>
-                                <span>Priority support</span>
-                            </li>
                         </ul>
                     </div>
 
                     <div className="flex flex-col gap-3">
-                        <button className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-colors shadow-lg flex items-center justify-center gap-2">
+                        <button
+                            onClick={handleUpgrade}
+                            disabled={isProcessing}
+                            className="w-full bg-emerald-600 text-white font-bold py-3 rounded-xl hover:bg-emerald-700 transition-colors shadow-lg flex items-center justify-center gap-2 disabled:opacity-50"
+                        >
                             <CreditCard size={20} />
-                            Upgrade Now - $9.99/month
+                            {isProcessing ? "Processing..." : "Upgrade Now - GHS 35"}
                         </button>
                         <button onClick={onClose} className="w-full bg-slate-100 text-slate-700 font-bold py-3 rounded-xl hover:bg-slate-200 transition-colors">
                             Maybe Later
@@ -388,8 +439,8 @@ function ReportDetailsModal({ report, onClose }: { report: any, onClose: () => v
         return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
     }, [report]);
 
-    // Format Data for Chart
-    const riskComponents = report.results?.risk_assessment?.[report.crop.toUpperCase()]?.components || {};
+    // Format Data for Chart - Pulling from risk_ml
+    const riskComponents = report.results?.risk_ml?.risk_assessment?.[report.crop.toUpperCase()]?.components || {};
     const chartData = {
         labels: ['Price Volatility', 'Weather Risk', 'Seasonal Risk', 'Suitability'],
         datasets: [{
@@ -411,7 +462,8 @@ function ReportDetailsModal({ report, onClose }: { report: any, onClose: () => v
     };
 
     const recommendations = generateRecommendationsArray(report);
-    const forecast = report.results?.weather_forecast?.daily || [];
+    // Forecast is now nested in risk_ml if available, or stays at results level
+    const forecast = report.results?.risk_ml?.weather_forecast?.daily || report.results?.weather_forecast?.daily || [];
 
     return (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={onClose}>

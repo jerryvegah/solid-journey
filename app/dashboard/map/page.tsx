@@ -1,7 +1,8 @@
 "use client";
 
 import { db, useAuth } from '@/lib/firebase';
-import { addDoc, collection, getDocs, query, serverTimestamp, where } from 'firebase/firestore';
+import { initiateCheckout } from '@/lib/payment';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
@@ -17,10 +18,11 @@ export default function MapPage() {
 
     // Paywall States
     const [assessmentCount, setAssessmentCount] = useState(0);
+    const [isPremium, setIsPremium] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
 
     // Field Boundary Form States
-    const [boundaryCropType, setBoundaryCropType] = useState('Maize');
+    const [boundaryCropType, setBoundaryCropType] = useState('maize');
     const [boundaryDescription, setBoundaryDescription] = useState('');
     const [datePlanted, setDatePlanted] = useState('');
 
@@ -29,15 +31,35 @@ export default function MapPage() {
     const [autoRegistrationStatus, setAutoRegistrationStatus] = useState<any>(null);
     const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
 
-    // API Endpoints
-    const POINT_ASSESSMENT_API_URL = process.env.NEXT_PUBLIC_API_RISK || 'https://agricheckb.onrender.com/assess-crop-risk';
-    const FIELD_BOUNDARY_API_URL = process.env.NEXT_PUBLIC_API_FIELDS || 'https://agricheckb2.onrender.com/fields';
+    // API Endpoints for your two Render services
+    const SATELLITE_BACKEND = 'https://agricheckb2.onrender.com'; // Backend A
+    const RISK_BACKEND = 'https://agricheckb.onrender.com';       // Backend B
+
+    const POINT_ASSESSMENT_API_URL = `${RISK_BACKEND}/assess-crop-risk`;
+    const FIELD_BOUNDARY_API_URL = `${SATELLITE_BACKEND}/fields`;
 
     // Helper: Show Alert
     const showAlert = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'error') => {
         setAlert({ type, message });
         setTimeout(() => setAlert(null), 5000);
     };
+
+    // --- FIX 1: Wake up BOTH backends on page load ---
+    useEffect(() => {
+        const wakeUpEngines = async () => {
+            try {
+                // Ping both concurrently to save time
+                await Promise.all([
+                    fetch(`${SATELLITE_BACKEND}/health`),
+                    fetch(`${RISK_BACKEND}/health`)
+                ]);
+                console.log("🚀 Both AgriCheck Engines (Satellite & Risk) are warming up...");
+            } catch (e) {
+                console.warn("One or more engines are still sleeping...");
+            }
+        };
+        wakeUpEngines();
+    }, []);
 
     // Initialize Map
     useEffect(() => {
@@ -47,14 +69,10 @@ export default function MapPage() {
             if (typeof window === 'undefined') return;
 
             try {
-                // Dynamically import Leaflet and Plugins
-                // @ts-ignore
                 const L = (await import('leaflet')).default;
                 // @ts-ignore
                 await import('leaflet-draw');
 
-                // Fix Leaflet Icon Issue in Next.js
-                // @ts-ignore
                 delete L.Icon.Default.prototype._getIconUrl;
                 L.Icon.Default.mergeOptions({
                     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -62,7 +80,6 @@ export default function MapPage() {
                     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
                 });
 
-                // Get Current Position
                 if (navigator.geolocation) {
                     navigator.geolocation.getCurrentPosition(
                         (position) => {
@@ -88,7 +105,6 @@ export default function MapPage() {
             if (!mapContainerRef.current) return;
             if (mapInstanceRef.current) return;
 
-            // Base Layers
             const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
 
             const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -104,43 +120,36 @@ export default function MapPage() {
                 attribution: '© Mapbox © OpenStreetMap'
             });
 
-            // Init Map - Use Satellite as default per user preference
-            map = L.map(mapContainerRef.current).setView([lat, lng], 16); // Higher zoom for field detail
+            map = L.map(mapContainerRef.current).setView([lat, lng], 16);
             mapInstanceRef.current = map;
-
-            // Add Default Layer
             satelliteLayer.addTo(map);
 
-            // Layer Control
             const baseLayers = {
                 'Satellite': satelliteLayer,
                 'Streets': osmLayer
             };
             L.control.layers(baseLayers).addTo(map);
 
-            // Feature Group for Drawn Items
             const drawnItems = new L.FeatureGroup();
             map.addLayer(drawnItems);
             drawnItemsRef.current = drawnItems;
 
-            // Draw Control
             const drawControl = new L.Control.Draw({
                 draw: {
                     polygon: {
                         allowIntersection: false,
                         showArea: true,
                         drawError: {
-                            color: '#e1e100', // Yellow
+                            color: '#e1e100',
                             message: '<strong>Error:</strong> shape edges cannot cross!'
                         },
                         shapeOptions: {
-                            color: '#10b981', // Emerald-500
+                            color: '#10b981',
                             weight: 3,
                             opacity: 0.8,
                             fillOpacity: 0.2
                         }
                     },
-                    // Disable other shapes as per original code focusing on polygons
                     polyline: false,
                     rectangle: false,
                     circle: false,
@@ -154,7 +163,6 @@ export default function MapPage() {
             });
             map.addControl(drawControl);
 
-            // Event Handlers for Draw
             map.on(L.Draw.Event.CREATED, (e: any) => {
                 const layer = e.layer;
                 drawnItems.clearLayers();
@@ -186,25 +194,30 @@ export default function MapPage() {
         };
     }, []);
 
-    // Load user's assessment count
+    // Load user's assessment count and premium status
     useEffect(() => {
-        const loadAssessmentCount = async () => {
+        const loadUserData = async () => {
             if (!user) return;
             try {
+                // 1. Check Premium Status
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    setIsPremium(userDoc.data().isPremium || false);
+                }
+
+                // 2. Load Assessment Count
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
                 const querySnapshot = await getDocs(q);
                 setAssessmentCount(querySnapshot.size);
             } catch (error) {
-                console.error("Error loading assessment count:", error);
+                console.error("Error loading user data:", error);
             }
         };
-        loadAssessmentCount();
+        loadUserData();
     }, [user]);
 
-    // Hectare Calculation Logic (using User's provided geodesic logic)
     const updateFieldAnalysis = async (L: any, layer: any) => {
-        // Defines geodesicArea function here since we don't have external util
         const geodesicArea = (latLngs: any[]) => {
             const pointsCount = latLngs.length;
             let area = 0;
@@ -222,14 +235,10 @@ export default function MapPage() {
             return Math.abs(area);
         };
 
-        // Use LatLngs
         const latlngs = layer.getLatLngs()[0];
-
-        // Simple area calculation (spherical) -> using User's logic
         const areaSqMeters = geodesicArea(latlngs);
         const areaHectares = areaSqMeters / 10000;
 
-        // Centroid & Perimeter
         const bounds = layer.getBounds();
         const center = bounds.getCenter();
 
@@ -240,7 +249,6 @@ export default function MapPage() {
             coordinates: layer.toGeoJSON().geometry.coordinates
         });
 
-        // Auto-Reg Status
         setAutoRegistrationStatus({
             type: 'success',
             title: 'Ready for Analysis',
@@ -248,7 +256,6 @@ export default function MapPage() {
         });
     };
 
-    // GeoJSON Upload Handler
     const handleGeoJSONUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file || !mapInstanceRef.current || !drawnItemsRef.current) return;
@@ -257,7 +264,6 @@ export default function MapPage() {
         reader.onload = async (event) => {
             try {
                 const json = JSON.parse(event.target?.result as string);
-                // @ts-ignore
                 const L = (await import('leaflet')).default;
 
                 drawnItemsRef.current.clearLayers();
@@ -268,7 +274,6 @@ export default function MapPage() {
                 drawnItemsRef.current.addLayer(geoJsonLayer);
                 mapInstanceRef.current.fitBounds(geoJsonLayer.getBounds());
 
-                // Update analysis for the first layer found
                 const layers = geoJsonLayer.getLayers();
                 if (layers.length > 0) {
                     updateFieldAnalysis(L, layers[0]);
@@ -283,118 +288,93 @@ export default function MapPage() {
         reader.readAsText(file);
     };
 
-    // Combined Submit Handler
+    // --- REFRACTORED: Combined Submit Handler ---
     const handleFieldSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
+        if (!user?.uid) return showAlert("Please login first.", "error");
         if (!fieldData) {
             showAlert("Please draw a field boundary first", 'warning');
             return;
         }
 
         // --- Paywall Check ---
-        if (assessmentCount >= 2) {
+        if (assessmentCount >= 2 && !isPremium) {
             setShowPaymentModal(true);
             return;
         }
 
         setIsLoading(true);
-        setLoadingMessage('Running comprehensive analysis...');
+        setLoadingMessage('Syncing data with Satellite and Risk engines...');
 
         try {
-            // 1. Point Assessment (Risk)
-            // Uses the centroid of the field
+            // STEP 1: Payload for Risk Backend (B)
             const riskPayload = {
                 latitude: fieldData.center.lat,
                 longitude: fieldData.center.lng,
-                elevation: 1200,
-                crop_type: boundaryCropType,
-                field_location: boundaryDescription
+                crop_type: boundaryCropType.toLowerCase(), // Normalizing for ML model
+                elevation: 1200
             };
 
-            let riskResponse;
-            try {
-                const res = await fetch(POINT_ASSESSMENT_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(riskPayload)
-                });
-                if (!res.ok) throw new Error("Risk API Error");
-                riskResponse = await res.json();
-            } catch (err) {
-                console.warn("Risk API failed, using mock", err);
-                riskResponse = {
-                    risk_assessment: {
-                        [boundaryCropType.toUpperCase()]: {
-                            risk_level: "Moderate Risk",
-                            components: { suitability_score: 0.75 }
-                        }
-                    }
-                };
-            }
-
-            // 2. Field Boundary Registration
+            // STEP 2: Payload for Satellite Backend (A)
             const boundaryPayload = {
-                crop_type: boundaryCropType,
+                crop_type: boundaryCropType.toLowerCase(),
                 field_location: boundaryDescription,
                 field_coordinates: fieldData.coordinates,
                 planting_date: datePlanted,
                 latitude: fieldData.center.lat,
-                longitude: fieldData.center.lng,
-                elevation: 1200
+                longitude: fieldData.center.lng
             };
 
-            let boundaryResponse;
-            try {
-                const res = await fetch(FIELD_BOUNDARY_API_URL, {
+            // STEP 3: Execute both API calls in parallel for better performance
+            const [riskRes, satelliteRes] = await Promise.all([
+                fetch(POINT_ASSESSMENT_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(riskPayload)
+                }),
+                fetch(FIELD_BOUNDARY_API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'X-User-ID': user?.uid || 'anonymous'
+                        'X-User-ID': user.uid
                     },
                     body: JSON.stringify(boundaryPayload)
-                });
-                if (!res.ok) throw new Error("Boundary API Error");
-                boundaryResponse = await res.json();
-            } catch (err) {
-                console.warn("Boundary API failed, using mock", err);
-                boundaryResponse = {
-                    success: true,
-                    satellite_monitoring: true,
-                    area_hectares: fieldData.hectares
-                };
-            }
+                })
+            ]);
 
-            // Save consolidated data to Firebase
-            if (user) {
-                await addDoc(collection(db, 'assessments'), {
-                    userId: user.uid,
-                    userEmail: user.email,
-                    type: 'comprehensive_analysis', // New Type
-                    cropType: boundaryCropType,
-                    fieldLocation: boundaryDescription,
-                    latitude: fieldData.center.lat,
-                    longitude: fieldData.center.lng,
-                    fieldCoordinates: JSON.stringify(fieldData.coordinates),
-                    datePlanted,
-                    results: {
-                        risk: riskResponse,
-                        boundary: boundaryResponse
-                    },
-                    area_hectares: fieldData.hectares,
-                    satellite_monitoring_enabled: true,
-                    createdAt: serverTimestamp()
-                });
+            const riskData = await riskRes.json();
+            const satelliteData = await satelliteRes.json();
 
-                // Update local count
-                setAssessmentCount(prev => prev + 1);
-            }
+            // STEP 4: Save Consolidated Master Record to Firebase
+            await addDoc(collection(db, 'assessments'), {
+                userId: user.uid,
+                userEmail: user.email,
+                type: 'comprehensive_analysis',
+                cropType: boundaryCropType,
+                fieldLocation: boundaryDescription,
+                latitude: fieldData.center.lat,
+                longitude: fieldData.center.lng,
+                fieldCoordinates: JSON.stringify(fieldData.coordinates),
+                datePlanted,
+                results: {
+                    satellite: satelliteData, // Contains poly_id, area
+                    risk_ml: riskData         // Contains ML prediction and Monte Carlo
+                },
+                area_hectares: fieldData.hectares,
+                satellite_monitoring_enabled: true,
+                createdAt: serverTimestamp()
+            });
 
-            showAlert("Field analyzed and registered successfully!", 'success');
+            // Update local count
+            setAssessmentCount(prev => prev + 1);
+
+            showAlert("Comprehensive Analysis Complete!", 'success');
             setLoadingMessage('Initializing map...');
 
         } catch (error: any) {
-            showAlert(error.message || "Failed to analyze field");
+            console.error("Analysis Error:", error);
+            showAlert("Connection error. Please try again.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -402,7 +382,6 @@ export default function MapPage() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12 relative min-h-screen">
-
             {/* Loading Overlay */}
             {isLoading && (
                 <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
@@ -442,7 +421,6 @@ export default function MapPage() {
                         <p className="text-slate-500 text-sm mt-1">Draw or upload your field boundary. We'll use the center point for risk analysis.</p>
                     </div>
 
-                    {/* Auto-Reg Status Badge */}
                     {autoRegistrationStatus && (
                         <div className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 animate-bounce-in">
                             <Satellite size={16} />
@@ -455,7 +433,6 @@ export default function MapPage() {
                 <div className="relative w-full h-[600px] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
                     <div ref={mapContainerRef} className="w-full h-full z-10" />
 
-                    {/* Overlay Tip */}
                     {!fieldData && (
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg z-[400] text-xs font-bold text-slate-600 pointer-events-none group-hover:opacity-0 transition-opacity">
                             Use the polygon tool (top left) to draw your field
@@ -496,11 +473,11 @@ export default function MapPage() {
                                     className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-slate-50 transition-all"
                                     required
                                 >
-                                    <option value="Maize">Maize</option>
-                                    <option value="Rice">Rice</option>
-                                    <option value="Soybean">Soybean</option>
-                                    <option value="Sorghum">Sorghum</option>
-                                    <option value="Other">Others (Monitoring Only)</option>
+                                    <option value="maize">Maize</option>
+                                    <option value="rice">Rice</option>
+                                    <option value="soybean">Soybean</option>
+                                    <option value="sorghum">Sorghum</option>
+                                    <option value="other">Others (Monitoring Only)</option>
                                 </select>
                             </div>
                             <div>
@@ -527,13 +504,11 @@ export default function MapPage() {
                         </div>
 
                         <div className="flex flex-col md:flex-row gap-4 items-center">
-                            {/* Upload Button */}
                             <label className="cursor-pointer flex items-center gap-2 px-6 py-4 bg-slate-100 text-slate-700 font-bold rounded-xl hover:bg-slate-200 transition-colors w-full md:w-auto justify-center">
                                 <Upload size={18} /> Upload GeoJSON
                                 <input type="file" accept=".json,.geojson" onChange={handleGeoJSONUpload} className="hidden" />
                             </label>
 
-                            {/* Submit Button */}
                             <button
                                 type="submit"
                                 className="flex-1 w-full bg-emerald-600 text-white font-bold py-4 px-8 rounded-xl shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-lg"
@@ -545,7 +520,6 @@ export default function MapPage() {
                         </div>
                     </form>
                 </div>
-
             </div>
 
             {/* Payment Modal */}
@@ -564,7 +538,40 @@ export default function MapPage() {
                             <div className="space-y-3">
                                 <button
                                     className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl shadow-lg hover:bg-emerald-700 transition-all flex items-center justify-center gap-2 group"
-                                    onClick={() => alert("Payment integration coming soon!")}
+                                    onClick={() => {
+                                        if (user) {
+                                            initiateCheckout(
+                                                {
+                                                    email: user.email || '',
+                                                    name: user.displayName || 'Farmer',
+                                                    uid: user.uid
+                                                },
+                                                'GHS', // Default to GHS
+                                                'PREMIUM',
+                                                {
+                                                    title: "Agricheck Premium",
+                                                    description: "Unlimited Field Assessments & Risk Analysis"
+                                                },
+                                                async (ref) => {
+                                                    // On Success: Update Firestore & Local State
+                                                    try {
+                                                        const userRef = doc(db, 'users', user.uid);
+                                                        await updateDoc(userRef, {
+                                                            isPremium: true,
+                                                            lastPaymentRef: ref,
+                                                            paidAt: serverTimestamp()
+                                                        });
+                                                        setIsPremium(true);
+                                                        setShowPaymentModal(false);
+                                                        showAlert("Payment Successful! Welcome to Premium.", "success");
+                                                    } catch (err) {
+                                                        console.error("Error updating premium status:", err);
+                                                        showAlert("Payment OK, but failed to update status. Please contact support.", "error");
+                                                    }
+                                                }
+                                            );
+                                        }
+                                    }}
                                 >
                                     <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
                                     Upgrade to Premium

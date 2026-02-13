@@ -73,6 +73,7 @@ export default function MapPage() {
                 // @ts-ignore
                 await import('leaflet-draw');
 
+                // @ts-ignore - _getIconUrl is a private property
                 delete L.Icon.Default.prototype._getIconUrl;
                 L.Icon.Default.mergeOptions({
                     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -102,6 +103,7 @@ export default function MapPage() {
         };
 
         const setupMap = (L: any, lat: number, lng: number) => {
+            // FIX: Add null check for mapContainerRef.current
             if (!mapContainerRef.current) return;
             if (mapInstanceRef.current) return;
 
@@ -120,6 +122,7 @@ export default function MapPage() {
                 attribution: '© Mapbox © OpenStreetMap'
             });
 
+            // FIX: Now TypeScript knows mapContainerRef.current is not null
             map = L.map(mapContainerRef.current).setView([lat, lng], 16);
             mapInstanceRef.current = map;
             satelliteLayer.addTo(map);

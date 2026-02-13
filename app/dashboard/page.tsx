@@ -30,6 +30,13 @@ export default function DashboardPage() {
     const [latestInput, setLatestInput] = useState<any>(null);
 
     useEffect(() => {
+        // FIX: Add null check for auth
+        if (!auth) {
+            console.error('Firebase Auth not initialized');
+            setLoading(false);
+            return;
+        }
+
         // 1. Listen for Auth State Changes
         const unsubscribeAuth = onAuthStateChanged(auth, (authUser) => {
             if (authUser) {
@@ -45,6 +52,13 @@ export default function DashboardPage() {
     }, []);
 
     const fetchDashboardData = (uid: string) => {
+        // FIX: Add null check for db
+        if (!db) {
+            console.error('Firestore not initialized');
+            setLoading(false);
+            return;
+        }
+
         // 2. Real-time listener for Active Contracts
         const contractsQuery = query(
             collection(db, "FarmerContracts"), 

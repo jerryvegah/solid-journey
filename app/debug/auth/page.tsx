@@ -1,6 +1,6 @@
 'use client'
 
-import { useAuth } from '@/lib/AuthContext'
+import { useAuth } from '@/lib/firebase'
 
 export default function DebugAuthPage() {
   const { user, loading } = useAuth()

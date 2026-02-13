@@ -45,6 +45,13 @@ export default function InputsPage() {
     // Load products from Firebase
     useEffect(() => {
         const loadProducts = async () => {
+            // FIX: Add null check for db
+            if (!db) {
+                console.error('Firestore not initialized');
+                setLoading(false);
+                return;
+            }
+
             try {
                 const productsRef = collection(db, 'InputProducts');
                 const q = query(productsRef, orderBy('name', 'asc'));
@@ -73,6 +80,12 @@ export default function InputsPage() {
             return;
         }
 
+        // FIX: Add null check for db
+        if (!db) {
+            alert('Database not initialized. Please refresh the page.');
+            return;
+        }
+
         initiateCheckout(
             {
                 email: user.email || '',
@@ -88,6 +101,9 @@ export default function InputsPage() {
             },
             async (ref) => {
                 try {
+                    // FIX: Check db again inside callback
+                    if (!db) return;
+                    
                     // Record the order in Firestore
                     await addDoc(collection(db, 'InputOrders'), {
                         userId: user.uid,

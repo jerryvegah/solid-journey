@@ -67,6 +67,13 @@ export default function SatelliteReportsPage() {
                 return;
             }
 
+            // FIX: Add null check for db
+            if (!db) {
+                console.error('Firestore not initialized');
+                setLoading(false);
+                return;
+            }
+
             try {
                 // 1. Check Premium Status
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -322,6 +329,12 @@ function PaymentModal({ user, onClose, onSuccess }: { user: any, onClose: () => 
     const handleUpgrade = () => {
         if (!user) return;
 
+        // FIX: Add null check for db
+        if (!db) {
+            alert('Database not initialized. Please refresh the page.');
+            return;
+        }
+
         setIsProcessing(true);
         initiateCheckout(
             {
@@ -337,6 +350,12 @@ function PaymentModal({ user, onClose, onSuccess }: { user: any, onClose: () => 
             },
             async (ref) => {
                 try {
+                    // FIX: Check db again inside callback
+                    if (!db) {
+                        alert("Database error. Please contact support.");
+                        return;
+                    }
+                    
                     const userRef = doc(db, 'users', user.uid);
                     await updateDoc(userRef, {
                         isPremium: true,

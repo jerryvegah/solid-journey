@@ -201,6 +201,13 @@ export default function MapPage() {
     useEffect(() => {
         const loadUserData = async () => {
             if (!user) return;
+            
+            // FIX: Add null check for db
+            if (!db) {
+                console.error('Firestore not initialized');
+                return;
+            }
+            
             try {
                 // 1. Check Premium Status
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -298,6 +305,12 @@ export default function MapPage() {
         if (!user?.uid) return showAlert("Please login first.", "error");
         if (!fieldData) {
             showAlert("Please draw a field boundary first", 'warning');
+            return;
+        }
+        
+        // FIX: Add null check for db
+        if (!db) {
+            showAlert("Database not initialized. Please refresh the page.", "error");
             return;
         }
 
@@ -558,6 +571,12 @@ export default function MapPage() {
                                                 async (ref) => {
                                                     // On Success: Update Firestore & Local State
                                                     try {
+                                                        // FIX: Add null check for db
+                                                        if (!db) {
+                                                            showAlert("Database not initialized. Please contact support.", "error");
+                                                            return;
+                                                        }
+                                                        
                                                         const userRef = doc(db, 'users', user.uid);
                                                         await updateDoc(userRef, {
                                                             isPremium: true,

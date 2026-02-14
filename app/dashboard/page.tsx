@@ -1,16 +1,16 @@
 "use client";
 
 import { useEffect, useState } from 'react';
-import { auth, db } from '@/lib/firebase'; // Ensure your firebase config exports 'db'
+import { auth, db } from '@/lib/firebase';
 import { onAuthStateChanged } from 'firebase/auth';
 import { 
   collection, 
   query, 
   where, 
   onSnapshot, 
-  limit, 
+  getDocs,
   orderBy,
-  getDocs
+  limit
 } from 'firebase/firestore';
 import { FileText, Package, Satellite, Loader2 } from 'lucide-react';
 
@@ -27,17 +27,16 @@ export default function DashboardPage() {
 
     // Recent Activity State
     const [latestContract, setLatestContract] = useState<any>(null);
+    const [latestReport, setLatestReport] = useState<any>(null);
     const [latestInput, setLatestInput] = useState<any>(null);
 
     useEffect(() => {
-        // FIX: Add null check for auth
         if (!auth) {
             console.error('Firebase Auth not initialized');
             setLoading(false);
             return;
         }
 
-        // 1. Listen for Auth State Changes
         const unsubscribeAuth = onAuthStateChanged(auth, (authUser) => {
             if (authUser) {
                 setUser(authUser);
@@ -51,39 +50,82 @@ export default function DashboardPage() {
         return () => unsubscribeAuth();
     }, []);
 
-    const fetchDashboardData = (uid: string) => {
-        // FIX: Add null check for db
+    const fetchDashboardData = async (uid: string) => {
         if (!db) {
             console.error('Firestore not initialized');
             setLoading(false);
             return;
         }
 
-        // 2. Real-time listener for Active Contracts
-        const contractsQuery = query(
-            collection(db, "FarmerContracts"), 
-            where("farmerId", "==", uid)
-        );
-        
-        const unsubscribeContracts = onSnapshot(contractsQuery, (snapshot) => {
-            setStats(prev => ({ ...prev, activeContracts: snapshot.size }));
+        try {
+            // 1. Fetch Assessments/Reports
+            const assessmentsQuery = query(
+                collection(db, "assessments"), 
+                where("userId", "==", uid),
+                orderBy("createdAt", "desc")
+            );
             
-            if (!snapshot.empty) {
-                // Get the most recent contract
-                const sorted = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                setLatestContract(sorted[0]);
+            const assessmentsSnapshot = await getDocs(assessmentsQuery);
+            const assessmentsCount = assessmentsSnapshot.size;
+            
+            setStats(prev => ({ ...prev, satelliteReports: assessmentsCount }));
+            
+            if (!assessmentsSnapshot.empty) {
+                const latestAssessment = assessmentsSnapshot.docs[0].data();
+                setLatestReport({
+                    cropType: latestAssessment.cropType || 'Unknown',
+                    fieldLocation: latestAssessment.fieldLocation || 'Unknown',
+                    area: latestAssessment.area_hectares || 0,
+                    date: latestAssessment.createdAt?.toDate().toLocaleDateString() || 'N/A'
+                });
             }
-        });
 
-        // 3. One-time fetch for other stats (example: inputs)
-        // Note: Replace "userId" or "farmerId" based on your schema
-        const inputsQuery = query(collection(db, "payments"), where("userId", "==", uid));
-        getDocs(inputsQuery).then(snap => {
-            setStats(prev => ({ ...prev, inputsOrdered: snap.size }));
-        });
+            // 2. Fetch Contracts
+            const contractsQuery = query(
+                collection(db, "FarmerContracts"), 
+                where("farmerId", "==", uid),
+                orderBy("createdAt", "desc")
+            );
+            
+            const contractsSnapshot = await getDocs(contractsQuery);
+            const contractsCount = contractsSnapshot.size;
+            
+            setStats(prev => ({ ...prev, activeContracts: contractsCount }));
+            
+            if (!contractsSnapshot.empty) {
+                const latestContractData = contractsSnapshot.docs[0].data();
+                setLatestContract({
+                    cropType: latestContractData.cropType || 'Unknown',
+                    totalProduceDue: latestContractData.totalProduceDue || 0,
+                    status: latestContractData.status || 'Unknown'
+                });
+            }
 
-        setLoading(false);
-        return () => unsubscribeContracts();
+            // 3. Fetch Inputs/Payments
+            const paymentsQuery = query(
+                collection(db, "payments"), 
+                where("userId", "==", uid)
+            );
+            
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            const paymentsCount = paymentsSnapshot.size;
+            
+            setStats(prev => ({ ...prev, inputsOrdered: paymentsCount }));
+            
+            if (!paymentsSnapshot.empty) {
+                const latestPaymentData = paymentsSnapshot.docs[0].data();
+                setLatestInput({
+                    productName: latestPaymentData.productName || 'Unknown',
+                    amount: latestPaymentData.amount || 0,
+                    date: latestPaymentData.createdAt?.toDate().toLocaleDateString() || 'N/A'
+                });
+            }
+
+        } catch (error) {
+            console.error("Error fetching dashboard data:", error);
+        } finally {
+            setLoading(false);
+        }
     };
 
     if (loading) {
@@ -127,24 +169,33 @@ export default function DashboardPage() {
                         icon={<FileText size={18} className="text-emerald-500" />}
                         data={latestContract ? [
                             { label: "Crop Type", value: latestContract.cropType },
-                            { label: "Produce Due", value: `${latestContract.produceDue} Bags` }
+                            { label: "Produce Due", value: `${latestContract.totalProduceDue} Bags` },
+                            { label: "Status", value: latestContract.status }
                         ] : null}
                         emptyMessage="No active contracts found."
                     />
 
-                    {/* Placeholder for Satellite Reports */}
+                    {/* Latest Satellite Report */}
                     <ActivityCard 
                         title="Latest Satellite Report" 
                         icon={<Satellite size={18} className="text-emerald-500" />}
-                        data={null}
+                        data={latestReport ? [
+                            { label: "Crop Type", value: latestReport.cropType },
+                            { label: "Location", value: latestReport.fieldLocation },
+                            { label: "Area", value: `${latestReport.area.toFixed(2)} ha` }
+                        ] : null}
                         emptyMessage="No reports available yet."
                     />
 
-                    {/* Placeholder for Input Packages */}
+                    {/* Latest Input Package */}
                     <ActivityCard 
                         title="Latest Input Package" 
                         icon={<Package size={18} className="text-emerald-500" />}
-                        data={null}
+                        data={latestInput ? [
+                            { label: "Product", value: latestInput.productName },
+                            { label: "Amount", value: `GH₵ ${latestInput.amount}` },
+                            { label: "Date", value: latestInput.date }
+                        ] : null}
                         emptyMessage="No recent orders."
                     />
                 </div>

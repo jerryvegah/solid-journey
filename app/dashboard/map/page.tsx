@@ -6,10 +6,12 @@ import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updat
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
+import { useRouter } from 'next/navigation';
 import React, { useEffect, useRef, useState } from 'react';
 
 export default function MapPage() {
     const { user } = useAuth();
+    const router = useRouter();
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const drawnItemsRef = useRef<any>(null);
@@ -27,13 +29,13 @@ export default function MapPage() {
     const [datePlanted, setDatePlanted] = useState('');
 
     // Analysis Results & UI States
-    const [fieldData, setFieldData] = useState<any>(null); // Stores calculated area, etc.
+    const [fieldData, setFieldData] = useState<any>(null);
     const [autoRegistrationStatus, setAutoRegistrationStatus] = useState<any>(null);
     const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
 
     // API Endpoints for your two Render services
-    const SATELLITE_BACKEND = 'https://agricheckb2.onrender.com'; // Backend A
-    const RISK_BACKEND = 'https://agricheckb.onrender.com';       // Backend B
+    const SATELLITE_BACKEND = 'https://agricheckb2.onrender.com';
+    const RISK_BACKEND = 'https://agricheckb.onrender.com';
 
     const POINT_ASSESSMENT_API_URL = `${RISK_BACKEND}/assess-crop-risk`;
     const FIELD_BOUNDARY_API_URL = `${SATELLITE_BACKEND}/fields`;
@@ -44,18 +46,34 @@ export default function MapPage() {
         setTimeout(() => setAlert(null), 5000);
     };
 
-    // --- FIX 1: Wake up BOTH backends on page load ---
+    // Wake up BOTH backends on page load (with cooldown)
     useEffect(() => {
         const wakeUpEngines = async () => {
+            // Check last wake-up time from localStorage
+            const lastWakeUp = localStorage.getItem('backend_last_wakeup');
+            const now = Date.now();
+            const twentyMinutes = 20 * 60 * 1000; // 20 minutes in milliseconds
+
+            // If we woke up the backends less than 20 minutes ago, skip
+            if (lastWakeUp && (now - parseInt(lastWakeUp)) < twentyMinutes) {
+                console.log("⏰ Backends were recently warmed up. Skipping wake-up call.");
+                return;
+            }
+
             try {
+                console.log("🚀 Waking up AgriCheck Engines (Satellite & Risk)...");
+                
                 // Ping both concurrently to save time
                 await Promise.all([
                     fetch(`${SATELLITE_BACKEND}/health`),
                     fetch(`${RISK_BACKEND}/health`)
                 ]);
-                console.log("🚀 Both AgriCheck Engines (Satellite & Risk) are warming up...");
+                
+                // Store the current timestamp
+                localStorage.setItem('backend_last_wakeup', now.toString());
+                console.log("✅ Both AgriCheck Engines are warming up...");
             } catch (e) {
-                console.warn("One or more engines are still sleeping...");
+                console.warn("⚠️ One or more engines are still sleeping...");
             }
         };
         wakeUpEngines();
@@ -89,7 +107,7 @@ export default function MapPage() {
                         (error) => {
                             console.error("Geolocation error:", error);
                             showAlert("Could not get your location. Defaulting to Ghana.", 'warning');
-                            setupMap(L, 5.6037, -0.1870); // Default fallback
+                            setupMap(L, 5.6037, -0.1870);
                         }
                     );
                 } else {
@@ -103,7 +121,6 @@ export default function MapPage() {
         };
 
         const setupMap = (L: any, lat: number, lng: number) => {
-            // FIX: Add null check for mapContainerRef.current
             if (!mapContainerRef.current) return;
             if (mapInstanceRef.current) return;
 
@@ -122,7 +139,6 @@ export default function MapPage() {
                 attribution: '© Mapbox © OpenStreetMap'
             });
 
-            // FIX: Now TypeScript knows mapContainerRef.current is not null
             map = L.map(mapContainerRef.current).setView([lat, lng], 16);
             mapInstanceRef.current = map;
             satelliteLayer.addTo(map);
@@ -202,20 +218,17 @@ export default function MapPage() {
         const loadUserData = async () => {
             if (!user) return;
             
-            // FIX: Add null check for db
             if (!db) {
                 console.error('Firestore not initialized');
                 return;
             }
             
             try {
-                // 1. Check Premium Status
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
                     setIsPremium(userDoc.data().isPremium || false);
                 }
 
-                // 2. Load Assessment Count
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
                 const querySnapshot = await getDocs(q);
@@ -298,7 +311,6 @@ export default function MapPage() {
         reader.readAsText(file);
     };
 
-    // --- REFRACTORED: Combined Submit Handler ---
     const handleFieldSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
 
@@ -308,13 +320,11 @@ export default function MapPage() {
             return;
         }
         
-        // FIX: Add null check for db
         if (!db) {
             showAlert("Database not initialized. Please refresh the page.", "error");
             return;
         }
 
-        // --- Paywall Check ---
         if (assessmentCount >= 2 && !isPremium) {
             setShowPaymentModal(true);
             return;
@@ -324,15 +334,13 @@ export default function MapPage() {
         setLoadingMessage('Syncing data with Satellite and Risk engines...');
 
         try {
-            // STEP 1: Payload for Risk Backend (B)
             const riskPayload = {
                 latitude: fieldData.center.lat,
                 longitude: fieldData.center.lng,
-                crop_type: boundaryCropType.toLowerCase(), // Normalizing for ML model
+                crop_type: boundaryCropType.toLowerCase(),
                 elevation: 1200
             };
 
-            // STEP 2: Payload for Satellite Backend (A)
             const boundaryPayload = {
                 crop_type: boundaryCropType.toLowerCase(),
                 field_location: boundaryDescription,
@@ -342,7 +350,6 @@ export default function MapPage() {
                 longitude: fieldData.center.lng
             };
 
-            // STEP 3: Execute both API calls in parallel for better performance
             const [riskRes, satelliteRes] = await Promise.all([
                 fetch(POINT_ASSESSMENT_API_URL, {
                     method: 'POST',
@@ -362,7 +369,6 @@ export default function MapPage() {
             const riskData = await riskRes.json();
             const satelliteData = await satelliteRes.json();
 
-            // STEP 4: Save Consolidated Master Record to Firebase
             await addDoc(collection(db, 'assessments'), {
                 userId: user.uid,
                 userEmail: user.email,
@@ -374,19 +380,22 @@ export default function MapPage() {
                 fieldCoordinates: JSON.stringify(fieldData.coordinates),
                 datePlanted,
                 results: {
-                    satellite: satelliteData, // Contains poly_id, area
-                    risk_ml: riskData         // Contains ML prediction and Monte Carlo
+                    satellite: satelliteData,
+                    risk_ml: riskData
                 },
                 area_hectares: fieldData.hectares,
                 satellite_monitoring_enabled: true,
                 createdAt: serverTimestamp()
             });
 
-            // Update local count
             setAssessmentCount(prev => prev + 1);
 
-            showAlert("Comprehensive Analysis Complete!", 'success');
-            setLoadingMessage('Initializing map...');
+            showAlert("Comprehensive Analysis Complete! Redirecting to reports...", 'success');
+            
+            // Redirect to satellite reports page after 2 seconds
+            setTimeout(() => {
+                router.push('/dashboard/satellite');
+            }, 2000);
 
         } catch (error: any) {
             console.error("Analysis Error:", error);
@@ -398,7 +407,6 @@ export default function MapPage() {
 
     return (
         <div className="max-w-7xl mx-auto space-y-8 pb-12 relative min-h-screen">
-            {/* Loading Overlay */}
             {isLoading && (
                 <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
                     <Loader2 className="animate-spin text-emerald-600 mb-4" size={48} />
@@ -406,7 +414,6 @@ export default function MapPage() {
                 </div>
             )}
 
-            {/* Alert Toast */}
             {alert && (
                 <div className={`fixed top-4 right-4 z-[9999] px-6 py-4 rounded-xl shadow-2xl border-l-4 flex items-center gap-3 animate-slide-in
                     ${alert.type === 'success' ? 'bg-emerald-50 border-emerald-500 text-emerald-800' :
@@ -418,7 +425,6 @@ export default function MapPage() {
                 </div>
             )}
 
-            {/* Header */}
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-bold text-slate-800">Field Analysis</h1>
@@ -426,7 +432,6 @@ export default function MapPage() {
                 </div>
             </div>
 
-            {/* Main Content */}
             <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-6 md:p-8 overflow-hidden">
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
                     <div>
@@ -445,7 +450,6 @@ export default function MapPage() {
                     )}
                 </div>
 
-                {/* Map Container */}
                 <div className="relative w-full h-[600px] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
                     <div ref={mapContainerRef} className="w-full h-full z-10" />
 
@@ -456,7 +460,6 @@ export default function MapPage() {
                     )}
                 </div>
 
-                {/* Stats Bar */}
                 {fieldData && (
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 animate-fade-in">
                         <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
@@ -477,7 +480,6 @@ export default function MapPage() {
                     </div>
                 )}
 
-                {/* Bottom Form & Actions */}
                 <div className="mt-8 border-t border-slate-100 pt-8">
                     <form onSubmit={handleFieldSubmit}>
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
@@ -538,7 +540,6 @@ export default function MapPage() {
                 </div>
             </div>
 
-            {/* Payment Modal */}
             {showPaymentModal && (
                 <div className="fixed inset-0 bg-black/60 z-[10000] flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowPaymentModal(false)}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden animate-bounce-in" onClick={e => e.stopPropagation()}>
@@ -562,16 +563,14 @@ export default function MapPage() {
                                                     name: user.displayName || 'Farmer',
                                                     uid: user.uid
                                                 },
-                                                'GHS', // Default to GHS
+                                                'GHS',
                                                 'PREMIUM',
                                                 {
                                                     title: "Agricheck Premium",
                                                     description: "Unlimited Field Assessments & Risk Analysis"
                                                 },
                                                 async (ref) => {
-                                                    // On Success: Update Firestore & Local State
                                                     try {
-                                                        // FIX: Add null check for db
                                                         if (!db) {
                                                             showAlert("Database not initialized. Please contact support.", "error");
                                                             return;

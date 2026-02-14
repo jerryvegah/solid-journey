@@ -7,8 +7,7 @@ import {
   collection, 
   query, 
   where, 
-  getDocs,
-  orderBy
+  getDocs
 } from 'firebase/firestore';
 import { FileText, Package, Satellite, Loader2 } from 'lucide-react';
 
@@ -49,7 +48,6 @@ export default function DashboardPage() {
     }, []);
 
     const fetchDashboardData = async (uid: string) => {
-        // ✅ NULL CHECKS
         if (!db) {
             console.error('❌ Firestore not initialized');
             setLoading(false);
@@ -67,28 +65,14 @@ export default function DashboardPage() {
         if (isDev) console.log('🔍 Fetching dashboard data for user:', uid);
 
         try {
-            // ========================================
-            // 1. Fetch Satellite Reports/Assessments
-            // ========================================
+            // 1. Fetch Assessments
             try {
-                if (!db) {
-                    console.error('❌ DB is null in assessments fetch');
-                    throw new Error('Database not initialized');
-                }
-
                 const assessmentsQuery = query(
                     collection(db, "assessments"), 
                     where("userId", "==", uid)
-                    // ❌ REMOVED orderBy - might cause index issues
                 );
                 
                 const assessmentsSnapshot = await getDocs(assessmentsQuery);
-                
-                if (!assessmentsSnapshot) {
-                    if (isDev) console.warn('⚠️ Assessments snapshot is null');
-                    return;
-                }
-                
                 const assessmentsCount = assessmentsSnapshot.size;
                 
                 if (isDev) console.log(`📊 Found ${assessmentsCount} assessments`);
@@ -96,12 +80,15 @@ export default function DashboardPage() {
                 setStats(prev => ({ ...prev, satelliteReports: assessmentsCount }));
                 
                 if (!assessmentsSnapshot.empty) {
-                    // Sort manually to get latest
+                    // FIX: Properly type the document data
                     const assessmentsDocs = assessmentsSnapshot.docs
-                        .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .sort((a: any, b: any) => {
-                            const timeA = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0;
-                            const timeB = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0;
+                        .map(doc => ({ 
+                            id: doc.id, 
+                            ...doc.data() 
+                        } as any)) // Cast to any to access properties
+                        .sort((a, b) => {
+                            const timeA = a.createdAt?.toMillis?.() || 0;
+                            const timeB = b.createdAt?.toMillis?.() || 0;
                             return timeB - timeA;
                         });
 
@@ -112,7 +99,7 @@ export default function DashboardPage() {
                         cropType: latestAssessment?.cropType || 'Unknown',
                         fieldLocation: latestAssessment?.fieldLocation || 'Unknown',
                         area: latestAssessment?.area_hectares || 0,
-                        date: latestAssessment?.createdAt && typeof latestAssessment.createdAt.toDate === 'function' 
+                        date: latestAssessment?.createdAt?.toDate?.() 
                             ? latestAssessment.createdAt.toDate().toLocaleDateString() 
                             : 'N/A'
                     });
@@ -121,28 +108,14 @@ export default function DashboardPage() {
                 console.error("Error fetching assessments:", error);
             }
 
-            // ========================================
             // 2. Fetch Contracts
-            // ========================================
             try {
-                if (!db) {
-                    console.error('❌ DB is null in contracts fetch');
-                    throw new Error('Database not initialized');
-                }
-
-                // ✅ SIMPLIFIED: Only use userId (consistent with other collections)
                 const contractsQuery = query(
                     collection(db, "FarmerContracts"), 
                     where("userId", "==", uid)
                 );
                 
                 const contractsSnapshot = await getDocs(contractsQuery);
-                
-                if (!contractsSnapshot) {
-                    console.warn('⚠️ Contracts snapshot is null');
-                    return;
-                }
-                
                 const contractsCount = contractsSnapshot.size;
                 
                 if (isDev) console.log(`📊 Found ${contractsCount} contracts`);
@@ -150,12 +123,15 @@ export default function DashboardPage() {
                 setStats(prev => ({ ...prev, activeContracts: contractsCount }));
                 
                 if (!contractsSnapshot.empty) {
-                    // Sort manually to get latest
+                    // FIX: Properly type the document data
                     const contractsDocs = contractsSnapshot.docs
-                        .map(doc => ({ id: doc.id, ...doc.data() }))
-                        .sort((a: any, b: any) => {
-                            const timeA = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0;
-                            const timeB = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0;
+                        .map(doc => ({ 
+                            id: doc.id, 
+                            ...doc.data() 
+                        } as any)) // Cast to any to access properties
+                        .sort((a, b) => {
+                            const timeA = a.createdAt?.toMillis?.() || 0;
+                            const timeB = b.createdAt?.toMillis?.() || 0;
                             return timeB - timeA;
                         });
 
@@ -172,20 +148,12 @@ export default function DashboardPage() {
                 console.error("❌ Error fetching contracts:", error);
             }
 
-            // ========================================
             // 3. Fetch Input Orders
-            // Check BOTH "payments" AND "InputOrders" collections
-            // ========================================
             let totalInputsCount = 0;
             let allInputs: any[] = [];
 
-            // Try "InputOrders" collection first (from your inputs page)
+            // Try InputOrders collection
             try {
-                if (!db) {
-                    console.error('❌ DB is null in InputOrders fetch');
-                    throw new Error('Database not initialized');
-                }
-
                 const inputOrdersQuery = query(
                     collection(db, "InputOrders"), 
                     where("userId", "==", uid)
@@ -193,31 +161,23 @@ export default function DashboardPage() {
                 
                 const inputOrdersSnapshot = await getDocs(inputOrdersQuery);
                 
-                if (!inputOrdersSnapshot) {
-                    if (isDev) console.warn('⚠️ InputOrders snapshot is null');
-                } else {
-                    if (isDev) console.log(`📦 Found ${inputOrdersSnapshot.size} input orders in InputOrders`);
-                    
-                    const inputOrdersDocs = inputOrdersSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        source: 'InputOrders'
-                    }));
-                    
-                    allInputs.push(...inputOrdersDocs);
-                    totalInputsCount += inputOrdersSnapshot.size;
-                }
+                if (isDev) console.log(`📦 Found ${inputOrdersSnapshot.size} input orders`);
+                
+                // FIX: Properly type the document data
+                const inputOrdersDocs = inputOrdersSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    source: 'InputOrders'
+                } as any)); // Cast to any
+                
+                allInputs.push(...inputOrdersDocs);
+                totalInputsCount += inputOrdersSnapshot.size;
             } catch (error) {
                 if (isDev) console.error("❌ Error fetching InputOrders:", error);
             }
 
-            // Also try "payments" collection (might have old data)
+            // Try payments collection
             try {
-                if (!db) {
-                    console.error('❌ DB is null in payments fetch');
-                    throw new Error('Database not initialized');
-                }
-
                 const paymentsQuery = query(
                     collection(db, "payments"), 
                     where("userId", "==", uid)
@@ -225,20 +185,17 @@ export default function DashboardPage() {
                 
                 const paymentsSnapshot = await getDocs(paymentsQuery);
                 
-                if (!paymentsSnapshot) {
-                    if (isDev) console.warn('⚠️ Payments snapshot is null');
-                } else {
-                    if (isDev) console.log(`💳 Found ${paymentsSnapshot.size} payments`);
-                    
-                    const paymentsDocs = paymentsSnapshot.docs.map(doc => ({
-                        id: doc.id,
-                        ...doc.data(),
-                        source: 'payments'
-                    }));
-                    
-                    allInputs.push(...paymentsDocs);
-                    totalInputsCount += paymentsSnapshot.size;
-                }
+                if (isDev) console.log(`💳 Found ${paymentsSnapshot.size} payments`);
+                
+                // FIX: Properly type the document data
+                const paymentsDocs = paymentsSnapshot.docs.map(doc => ({
+                    id: doc.id,
+                    ...doc.data(),
+                    source: 'payments'
+                } as any)); // Cast to any
+                
+                allInputs.push(...paymentsDocs);
+                totalInputsCount += paymentsSnapshot.size;
             } catch (error) {
                 if (isDev) console.error("❌ Error fetching payments:", error);
             }
@@ -247,51 +204,21 @@ export default function DashboardPage() {
             
             setStats(prev => ({ ...prev, inputsOrdered: totalInputsCount }));
             
-            // Get latest input from combined results
+            // Get latest input
             if (allInputs.length > 0) {
-                // Sort by createdAt - handle both Timestamp objects and other types
-                const sortedInputs = allInputs.sort((a: any, b: any) => {
-                    let timeA = 0;
-                    let timeB = 0;
-
-                    // Handle Firestore Timestamp
-                    if (a.createdAt && typeof a.createdAt.toMillis === 'function') {
-                        timeA = a.createdAt.toMillis();
-                    }
-                    // Handle Date object
-                    else if (a.createdAt instanceof Date) {
-                        timeA = a.createdAt.getTime();
-                    }
-                    // Handle number (timestamp in milliseconds)
-                    else if (typeof a.createdAt === 'number') {
-                        timeA = a.createdAt;
-                    }
-                    // Handle ISO string
-                    else if (typeof a.createdAt === 'string') {
-                        timeA = new Date(a.createdAt).getTime();
-                    }
-
-                    // Same for b
-                    if (b.createdAt && typeof b.createdAt.toMillis === 'function') {
-                        timeB = b.createdAt.toMillis();
-                    }
-                    else if (b.createdAt instanceof Date) {
-                        timeB = b.createdAt.getTime();
-                    }
-                    else if (typeof b.createdAt === 'number') {
-                        timeB = b.createdAt;
-                    }
-                    else if (typeof b.createdAt === 'string') {
-                        timeB = new Date(b.createdAt).getTime();
-                    }
-
+                const sortedInputs = allInputs.sort((a, b) => {
+                    const timeA = a.createdAt?.toMillis?.() || 
+                                  (a.createdAt instanceof Date ? a.createdAt.getTime() : 0) ||
+                                  (typeof a.createdAt === 'number' ? a.createdAt : 0);
+                    const timeB = b.createdAt?.toMillis?.() || 
+                                  (b.createdAt instanceof Date ? b.createdAt.getTime() : 0) ||
+                                  (typeof b.createdAt === 'number' ? b.createdAt : 0);
                     return timeB - timeA;
                 });
 
                 const latestInputData = sortedInputs[0];
                 if (isDev) console.log('✅ Latest input:', latestInputData);
                 
-                // Format date based on type
                 let formattedDate = 'N/A';
                 if (latestInputData?.createdAt) {
                     if (typeof latestInputData.createdAt.toDate === 'function') {
@@ -410,7 +337,7 @@ export default function DashboardPage() {
     );
 }
 
-// Helper Sub-components for cleaner code
+// Helper Sub-components
 function StatCard({ icon, title, value }: { icon: any, title: string, value: number }) {
     return (
         <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">

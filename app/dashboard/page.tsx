@@ -7,10 +7,8 @@ import {
   collection, 
   query, 
   where, 
-  onSnapshot, 
   getDocs,
-  orderBy,
-  limit
+  orderBy
 } from 'firebase/firestore';
 import { FileText, Package, Satellite, Loader2 } from 'lucide-react';
 
@@ -51,73 +49,267 @@ export default function DashboardPage() {
     }, []);
 
     const fetchDashboardData = async (uid: string) => {
+        // ✅ NULL CHECKS
         if (!db) {
-            console.error('Firestore not initialized');
+            console.error('❌ Firestore not initialized');
             setLoading(false);
             return;
         }
 
+        if (!uid || uid.trim() === '') {
+            console.error('❌ Invalid user ID');
+            setLoading(false);
+            return;
+        }
+
+        const isDev = process.env.NODE_ENV === 'development';
+        
+        if (isDev) console.log('🔍 Fetching dashboard data for user:', uid);
+
         try {
-            // 1. Fetch Assessments/Reports
-            const assessmentsQuery = query(
-                collection(db, "assessments"), 
-                where("userId", "==", uid),
-                orderBy("createdAt", "desc")
-            );
-            
-            const assessmentsSnapshot = await getDocs(assessmentsQuery);
-            const assessmentsCount = assessmentsSnapshot.size;
-            
-            setStats(prev => ({ ...prev, satelliteReports: assessmentsCount }));
-            
-            if (!assessmentsSnapshot.empty) {
-                const latestAssessment = assessmentsSnapshot.docs[0].data();
-                setLatestReport({
-                    cropType: latestAssessment.cropType || 'Unknown',
-                    fieldLocation: latestAssessment.fieldLocation || 'Unknown',
-                    area: latestAssessment.area_hectares || 0,
-                    date: latestAssessment.createdAt?.toDate().toLocaleDateString() || 'N/A'
-                });
+            // ========================================
+            // 1. Fetch Satellite Reports/Assessments
+            // ========================================
+            try {
+                if (!db) {
+                    console.error('❌ DB is null in assessments fetch');
+                    throw new Error('Database not initialized');
+                }
+
+                const assessmentsQuery = query(
+                    collection(db, "assessments"), 
+                    where("userId", "==", uid)
+                    // ❌ REMOVED orderBy - might cause index issues
+                );
+                
+                const assessmentsSnapshot = await getDocs(assessmentsQuery);
+                
+                if (!assessmentsSnapshot) {
+                    if (isDev) console.warn('⚠️ Assessments snapshot is null');
+                    return;
+                }
+                
+                const assessmentsCount = assessmentsSnapshot.size;
+                
+                if (isDev) console.log(`📊 Found ${assessmentsCount} assessments`);
+                
+                setStats(prev => ({ ...prev, satelliteReports: assessmentsCount }));
+                
+                if (!assessmentsSnapshot.empty) {
+                    // Sort manually to get latest
+                    const assessmentsDocs = assessmentsSnapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .sort((a: any, b: any) => {
+                            const timeA = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0;
+                            const timeB = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0;
+                            return timeB - timeA;
+                        });
+
+                    const latestAssessment = assessmentsDocs[0];
+                    if (isDev) console.log('✅ Latest assessment:', latestAssessment);
+                    
+                    setLatestReport({
+                        cropType: latestAssessment?.cropType || 'Unknown',
+                        fieldLocation: latestAssessment?.fieldLocation || 'Unknown',
+                        area: latestAssessment?.area_hectares || 0,
+                        date: latestAssessment?.createdAt && typeof latestAssessment.createdAt.toDate === 'function' 
+                            ? latestAssessment.createdAt.toDate().toLocaleDateString() 
+                            : 'N/A'
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching assessments:", error);
             }
 
+            // ========================================
             // 2. Fetch Contracts
-            const contractsQuery = query(
-                collection(db, "FarmerContracts"), 
-                where("farmerId", "==", uid),
-                orderBy("createdAt", "desc")
-            );
-            
-            const contractsSnapshot = await getDocs(contractsQuery);
-            const contractsCount = contractsSnapshot.size;
-            
-            setStats(prev => ({ ...prev, activeContracts: contractsCount }));
-            
-            if (!contractsSnapshot.empty) {
-                const latestContractData = contractsSnapshot.docs[0].data();
-                setLatestContract({
-                    cropType: latestContractData.cropType || 'Unknown',
-                    totalProduceDue: latestContractData.totalProduceDue || 0,
-                    status: latestContractData.status || 'Unknown'
-                });
+            // ========================================
+            try {
+                if (!db) {
+                    console.error('❌ DB is null in contracts fetch');
+                    throw new Error('Database not initialized');
+                }
+
+                // ✅ SIMPLIFIED: Only use userId (consistent with other collections)
+                const contractsQuery = query(
+                    collection(db, "FarmerContracts"), 
+                    where("userId", "==", uid)
+                );
+                
+                const contractsSnapshot = await getDocs(contractsQuery);
+                
+                if (!contractsSnapshot) {
+                    console.warn('⚠️ Contracts snapshot is null');
+                    return;
+                }
+                
+                const contractsCount = contractsSnapshot.size;
+                
+                if (isDev) console.log(`📊 Found ${contractsCount} contracts`);
+                
+                setStats(prev => ({ ...prev, activeContracts: contractsCount }));
+                
+                if (!contractsSnapshot.empty) {
+                    // Sort manually to get latest
+                    const contractsDocs = contractsSnapshot.docs
+                        .map(doc => ({ id: doc.id, ...doc.data() }))
+                        .sort((a: any, b: any) => {
+                            const timeA = a.createdAt && typeof a.createdAt.toMillis === 'function' ? a.createdAt.toMillis() : 0;
+                            const timeB = b.createdAt && typeof b.createdAt.toMillis === 'function' ? b.createdAt.toMillis() : 0;
+                            return timeB - timeA;
+                        });
+
+                    const latestContractData = contractsDocs[0];
+                    if (isDev) console.log('✅ Latest contract:', latestContractData);
+                    
+                    setLatestContract({
+                        cropType: latestContractData?.cropType || 'Unknown',
+                        totalProduceDue: latestContractData?.totalProduceDue || 0,
+                        status: latestContractData?.status || 'Unknown'
+                    });
+                }
+            } catch (error) {
+                console.error("❌ Error fetching contracts:", error);
             }
 
-            // 3. Fetch Inputs/Payments
-            const paymentsQuery = query(
-                collection(db, "payments"), 
-                where("userId", "==", uid)
-            );
+            // ========================================
+            // 3. Fetch Input Orders
+            // Check BOTH "payments" AND "InputOrders" collections
+            // ========================================
+            let totalInputsCount = 0;
+            let allInputs: any[] = [];
+
+            // Try "InputOrders" collection first (from your inputs page)
+            try {
+                if (!db) {
+                    console.error('❌ DB is null in InputOrders fetch');
+                    throw new Error('Database not initialized');
+                }
+
+                const inputOrdersQuery = query(
+                    collection(db, "InputOrders"), 
+                    where("userId", "==", uid)
+                );
+                
+                const inputOrdersSnapshot = await getDocs(inputOrdersQuery);
+                
+                if (!inputOrdersSnapshot) {
+                    if (isDev) console.warn('⚠️ InputOrders snapshot is null');
+                } else {
+                    if (isDev) console.log(`📦 Found ${inputOrdersSnapshot.size} input orders in InputOrders`);
+                    
+                    const inputOrdersDocs = inputOrdersSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        source: 'InputOrders'
+                    }));
+                    
+                    allInputs.push(...inputOrdersDocs);
+                    totalInputsCount += inputOrdersSnapshot.size;
+                }
+            } catch (error) {
+                if (isDev) console.error("❌ Error fetching InputOrders:", error);
+            }
+
+            // Also try "payments" collection (might have old data)
+            try {
+                if (!db) {
+                    console.error('❌ DB is null in payments fetch');
+                    throw new Error('Database not initialized');
+                }
+
+                const paymentsQuery = query(
+                    collection(db, "payments"), 
+                    where("userId", "==", uid)
+                );
+                
+                const paymentsSnapshot = await getDocs(paymentsQuery);
+                
+                if (!paymentsSnapshot) {
+                    if (isDev) console.warn('⚠️ Payments snapshot is null');
+                } else {
+                    if (isDev) console.log(`💳 Found ${paymentsSnapshot.size} payments`);
+                    
+                    const paymentsDocs = paymentsSnapshot.docs.map(doc => ({
+                        id: doc.id,
+                        ...doc.data(),
+                        source: 'payments'
+                    }));
+                    
+                    allInputs.push(...paymentsDocs);
+                    totalInputsCount += paymentsSnapshot.size;
+                }
+            } catch (error) {
+                if (isDev) console.error("❌ Error fetching payments:", error);
+            }
+
+            if (isDev) console.log(`📊 Total inputs/orders: ${totalInputsCount}`);
             
-            const paymentsSnapshot = await getDocs(paymentsQuery);
-            const paymentsCount = paymentsSnapshot.size;
+            setStats(prev => ({ ...prev, inputsOrdered: totalInputsCount }));
             
-            setStats(prev => ({ ...prev, inputsOrdered: paymentsCount }));
-            
-            if (!paymentsSnapshot.empty) {
-                const latestPaymentData = paymentsSnapshot.docs[0].data();
+            // Get latest input from combined results
+            if (allInputs.length > 0) {
+                // Sort by createdAt - handle both Timestamp objects and other types
+                const sortedInputs = allInputs.sort((a: any, b: any) => {
+                    let timeA = 0;
+                    let timeB = 0;
+
+                    // Handle Firestore Timestamp
+                    if (a.createdAt && typeof a.createdAt.toMillis === 'function') {
+                        timeA = a.createdAt.toMillis();
+                    }
+                    // Handle Date object
+                    else if (a.createdAt instanceof Date) {
+                        timeA = a.createdAt.getTime();
+                    }
+                    // Handle number (timestamp in milliseconds)
+                    else if (typeof a.createdAt === 'number') {
+                        timeA = a.createdAt;
+                    }
+                    // Handle ISO string
+                    else if (typeof a.createdAt === 'string') {
+                        timeA = new Date(a.createdAt).getTime();
+                    }
+
+                    // Same for b
+                    if (b.createdAt && typeof b.createdAt.toMillis === 'function') {
+                        timeB = b.createdAt.toMillis();
+                    }
+                    else if (b.createdAt instanceof Date) {
+                        timeB = b.createdAt.getTime();
+                    }
+                    else if (typeof b.createdAt === 'number') {
+                        timeB = b.createdAt;
+                    }
+                    else if (typeof b.createdAt === 'string') {
+                        timeB = new Date(b.createdAt).getTime();
+                    }
+
+                    return timeB - timeA;
+                });
+
+                const latestInputData = sortedInputs[0];
+                if (isDev) console.log('✅ Latest input:', latestInputData);
+                
+                // Format date based on type
+                let formattedDate = 'N/A';
+                if (latestInputData?.createdAt) {
+                    if (typeof latestInputData.createdAt.toDate === 'function') {
+                        formattedDate = latestInputData.createdAt.toDate().toLocaleDateString();
+                    } else if (latestInputData.createdAt instanceof Date) {
+                        formattedDate = latestInputData.createdAt.toLocaleDateString();
+                    } else if (typeof latestInputData.createdAt === 'string') {
+                        formattedDate = new Date(latestInputData.createdAt).toLocaleDateString();
+                    } else if (typeof latestInputData.createdAt === 'number') {
+                        formattedDate = new Date(latestInputData.createdAt).toLocaleDateString();
+                    }
+                }
+                
                 setLatestInput({
-                    productName: latestPaymentData.productName || 'Unknown',
-                    amount: latestPaymentData.amount || 0,
-                    date: latestPaymentData.createdAt?.toDate().toLocaleDateString() || 'N/A'
+                    productName: latestInputData?.productName || 'Unknown Product',
+                    amount: latestInputData?.amount || 0,
+                    date: formattedDate,
+                    source: latestInputData?.source || 'unknown'
                 });
             }
 
@@ -200,6 +392,20 @@ export default function DashboardPage() {
                     />
                 </div>
             </div>
+
+            {/* Debug Info (Remove in production) */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="bg-slate-100 rounded-xl p-4 mt-8">
+                    <h3 className="font-bold text-slate-700 mb-2">🔧 Debug Info</h3>
+                    <div className="text-xs text-slate-600 space-y-1 font-mono">
+                        <div>User ID: {user?.uid}</div>
+                        <div>Contracts: {stats.activeContracts}</div>
+                        <div>Inputs: {stats.inputsOrdered}</div>
+                        <div>Reports: {stats.satelliteReports}</div>
+                        <div className="text-yellow-600">Check browser console for detailed logs</div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

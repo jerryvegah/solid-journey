@@ -17,6 +17,9 @@ export default function ContractsPage() {
     // Load user contracts
     useEffect(() => {
         const loadContracts = async () => {
+            // FIXED: Don't start loading until auth is complete
+            if (authLoading) return;
+            
             if (!user) {
                 setLoading(false);
                 return;
@@ -33,7 +36,7 @@ export default function ContractsPage() {
         };
 
         loadContracts();
-    }, [user]);
+    }, [user, authLoading]); // FIXED: Added authLoading to dependencies
 
     // Handle view contract details
     const handleViewContract = async (contract: FarmerContract) => {
@@ -52,7 +55,6 @@ export default function ContractsPage() {
                 mapInstance.current = null;
             }
 
-            // FIX: Add null check for mapRef.current before using it
             if (!mapRef.current) return;
 
             try {
@@ -70,7 +72,6 @@ export default function ContractsPage() {
                 const centerLat = lats.reduce((a: number, b: number) => a + b, 0) / lats.length;
                 const centerLng = lngs.reduce((a: number, b: number) => a + b, 0) / lngs.length;
 
-                // FIX: Now TypeScript knows mapRef.current is not null
                 const map = L.map(mapRef.current, {
                     center: [centerLat, centerLng],
                     zoom: 14,
@@ -116,21 +117,25 @@ export default function ContractsPage() {
         }
     };
 
-    // Show loading indicator until both auth and data fetch are complete
+    // FIXED: Show loading spinner while checking auth or loading data
     if (authLoading || loading) {
         return (
-            <div className="max-w-7xl mx-auto px-4 py-20 flex flex-col justify-center items-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-4"></div>
-                <div className="text-slate-500 text-lg font-medium">Gathering your contracts...</div>
+            <div className="max-w-7xl mx-auto relative pb-20 px-4">
+                <div className="flex flex-col justify-center items-center h-96">
+                    <FileText size={48} className="text-emerald-500 animate-pulse mb-4" />
+                    <div className="text-slate-600 text-lg font-semibold">Loading your contracts...</div>
+                </div>
             </div>
         );
     }
 
+    // FIXED: Show sign-in message if not authenticated
     if (!user) {
         return (
-            <div className="max-w-7xl mx-auto px-4 py-20 text-center">
-                <FileText size={48} className="mx-auto text-slate-300 mb-4" />
-                <div className="text-slate-500 text-lg">Please sign in to view your active contracts.</div>
+            <div className="max-w-7xl mx-auto relative pb-20 px-4">
+                <div className="flex justify-center items-center h-64">
+                    <div className="text-slate-500 text-lg">Please sign in to view your contracts.</div>
+                </div>
             </div>
         );
     }
@@ -148,9 +153,9 @@ export default function ContractsPage() {
             </div>
 
             {contracts.length === 0 ? (
-                <div className="bg-white rounded-2xl shadow-md p-12 text-center border border-slate-100">
+                <div className="bg-white rounded-2xl shadow-md p-8 sm:p-12 text-center border border-slate-100">
                     <FileText size={64} className="mx-auto text-slate-300 mb-4" />
-                    <h2 className="text-2xl font-bold text-slate-700 mb-2">No Contracts Yet</h2>
+                    <h2 className="text-xl sm:text-2xl font-bold text-slate-700 mb-2">No Contracts Yet</h2>
                     <p className="text-slate-500 mb-6">Sign up for Buy Now Pay Later on the Inputs page to get started.</p>
                     <a href="/dashboard/inputs" className="inline-block bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold hover:bg-emerald-700 transition-colors">
                         Browse Inputs

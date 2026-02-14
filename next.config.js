@@ -1,6 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
@@ -9,6 +10,10 @@ const nextConfig = {
       {
         protocol: 'https',
         hostname: 'agricheck.farm',
+      },
+      {
+        protocol: 'https',
+        hostname: 'www.agricheck.farm',
       },
       {
         protocol: 'https',

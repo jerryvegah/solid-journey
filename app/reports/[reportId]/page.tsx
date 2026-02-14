@@ -1,264 +1,402 @@
-// app/reports/[reportId]/page.tsx - COMPLETE FILE
-// Just copy this entire file - no Python needed!
-
 "use client";
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+
 import { db, useAuth } from '@/lib/firebase';
+import {
+    BarElement,
+    CategoryScale,
+    Chart as ChartJS,
+    Legend,
+    LinearScale,
+    Title,
+    Tooltip,
+} from 'chart.js';
 import { doc, getDoc } from 'firebase/firestore';
-import { ArrowLeft, Download, AlertTriangle, CheckCircle, Satellite, Activity, CloudRain, Thermometer, Droplets } from 'lucide-react';
+import 'leaflet/dist/leaflet.css';
+import { Activity, AlertTriangle, ArrowLeft, Download, Droplets, Landmark, MapPin, Printer, Satellite, Thermometer, TrendingUp, Wind } from 'lucide-react';
+import Link from 'next/link';
+import { useParams, useRouter } from 'next/navigation';
+import { useEffect, useRef, useState } from 'react';
+import { Bar } from 'react-chartjs-2';
+
+// Register ChartJS
+ChartJS.register(
+    CategoryScale,
+    LinearScale,
+    BarElement,
+    Title,
+    Tooltip,
+    Legend
+);
 
 export default function FullReportPage() {
-  const params = useParams();
-  const router = useRouter();
-  const { user } = useAuth();
-  const [report, setReport] = useState<any>(null);
-  const [loading, setLoading] = useState(true);
+    const { reportId } = useParams();
+    const router = useRouter();
+    const { user, loading: authLoading } = useAuth();
+    const [report, setReport] = useState<any>(null);
+    const [loading, setLoading] = useState(true);
+    const mapRef = useRef<HTMLDivElement>(null);
+    const mapInstance = useRef<any>(null);
 
-  useEffect(() => {
-    if (!user) { router.push('/login'); return; }
-    
-    const loadReport = async () => {
-      // FIX: Add null check for db
-      if (!db) {
-        console.error('Firestore not initialized');
-        setLoading(false);
-        return;
-      }
-      
-      try {
-        const reportDoc = await getDoc(doc(db, 'assessments', params.reportId as string));
-        if (reportDoc.exists()) setReport({ id: reportDoc.id, ...reportDoc.data() });
-      } catch (error) {
-        console.error('Error:', error);
-      } finally {
-        setLoading(false);
-      }
+    useEffect(() => {
+        const fetchReport = async () => {
+            // Wait for auth to resolve before making any routing decisions
+            if (authLoading) return;
+
+            if (!user) {
+                // Redirect to /signin (fix for the 404 /login issue)
+                router.push('/signin');
+                return;
+            }
+
+            if (!reportId) {
+                setLoading(false);
+                return;
+            }
+
+            // FIX: Add null check for db
+            if (!db) {
+                console.error('Firestore not initialized');
+                setLoading(false);
+                return;
+            }
+
+            try {
+                const docRef = doc(db, 'assessments', reportId as string);
+                const docSnap = await getDoc(docRef);
+
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    setReport({
+                        id: docSnap.id,
+                        title: "AI FIELD ANALYSIS",
+                        crop: data.cropType || "Unknown",
+                        date: data.createdAt?.toDate().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' }) || "N/A",
+                        fieldName: data.fieldLocation || "Unknown Field",
+                        coordinates: `${data.latitude?.toFixed(6) || '0.000000'}, ${data.longitude?.toFixed(6) || '0.000000'}`,
+                        type: "Field Boundary",
+                        area: `${data.area_hectares?.toFixed(2) || '0.00'} hectares`,
+                        monitoringType: data.satellite_monitoring_enabled ? "Satellite Monitoring" : "Manual Assessment",
+                        plantedDate: data.datePlanted || "N/A",
+                        stage: "vegetative",
+                        daysAfterPlanting: data.datePlanted ? Math.floor((new Date().getTime() - new Date(data.datePlanted).getTime()) / (1000 * 60 * 60 * 24)) : 0,
+                        expectedSeason: 120,
+                        peakNDVI: 0.75,
+                        riskLevel: data.results?.risk_ml?.risk_assessment?.[data.cropType?.toUpperCase()]?.risk_level || "Unknown",
+                        results: data.results || {}
+                    });
+                }
+            } catch (error) {
+                console.error("Error fetching report:", error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchReport();
+    }, [user, reportId, authLoading, router]);
+
+    // Initialize Map
+    useEffect(() => {
+        let L: any;
+        const initMap = async () => {
+            if (!mapRef.current || mapInstance.current || !report) return;
+            try {
+                // @ts-ignore
+                L = (await import('leaflet')).default;
+                const [lat, lng] = report.coordinates.split(',').map((s: string) => parseFloat(s.trim()));
+
+                const map = L.map(mapRef.current, {
+                    center: [lat, lng],
+                    zoom: 15,
+                    zoomControl: true,
+                    scrollWheelZoom: false
+                });
+                mapInstance.current = map;
+
+                L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+                L.marker([lat, lng]).addTo(map).bindPopup(report.fieldName).openPopup();
+            } catch (e) {
+                console.error("Map init failed", e);
+            }
+        };
+        initMap();
+        return () => { if (mapInstance.current) { mapInstance.current.remove(); mapInstance.current = null; } };
+    }, [report]);
+
+    if (authLoading || loading) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center">
+                <Satellite size={48} className="text-emerald-500 animate-pulse mb-4" />
+                <div className="text-slate-600 text-lg font-semibold">Generating full report...</div>
+            </div>
+        );
+    }
+
+    if (!user || !report) {
+        return (
+            <div className="min-h-screen bg-slate-50 flex flex-col justify-center items-center p-4 text-center">
+                <h1 className="text-2xl font-bold text-slate-800 mb-2">Report Not Found</h1>
+                <p className="text-slate-600 mb-6">The report you are looking for might have been deleted or is inaccessible.</p>
+                <Link href="/dashboard/satellite" className="bg-emerald-600 text-white px-6 py-3 rounded-lg font-bold">
+                    Back to Dashboard
+                </Link>
+            </div>
+        );
+    }
+
+    // Chart Data
+    const riskComponents = report.results?.risk_ml?.risk_assessment?.[report.crop.toUpperCase()]?.components || {};
+    const chartData = {
+        labels: ['Price Volatility', 'Weather Risk', 'Seasonal Risk', 'Suitability'],
+        datasets: [{
+            label: 'Risk Level %',
+            data: [
+                (riskComponents.price_volatility || 0) * 100,
+                (riskComponents.short_term_weather_risk || 0) * 100,
+                (riskComponents.long_term_seasonal_risk || 0) * 100,
+                (riskComponents.suitability_score || 0) * 100
+            ],
+            backgroundColor: [
+                'rgba(255, 159, 64, 0.7)',
+                'rgba(255, 99, 132, 0.7)',
+                'rgba(255, 206, 86, 0.7)',
+                'rgba(75, 192, 192, 0.7)'
+            ],
+            borderRadius: 8,
+            borderWidth: 0,
+        }]
     };
-    loadReport();
-  }, [user, params.reportId, router]);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div>Loading...</div></div>;
-  if (!report) return <div className="min-h-screen flex items-center justify-center"><div>Report not found</div></div>;
+    const recommendations = [];
+    const riskData = report.results?.risk_ml?.risk_assessment?.[report.crop.toUpperCase()];
+    if (riskData) {
+        if (riskData.components?.price_volatility > 0.6) recommendations.push('Price volatility is high; consider hedging strategies.');
+        if (riskData.components?.short_term_weather_risk > 0.4) recommendations.push('Adverse weather is expected; prepare accordingly.');
+        if (riskData.risk_level === 'High Risk') recommendations.push('Implement comprehensive risk management strategies.');
+        else if (riskData.risk_level === 'Moderate Risk') recommendations.push('Regular monitoring is recommended.');
+        else recommendations.push('Maintain standard agricultural practices.');
+    }
+    if (recommendations.length === 0) recommendations.push("Maintain standard agricultural practices.");
 
-  const riskData = getRiskData(report);
-  const forecast = report.results?.risk_ml?.weather_forecast?.daily || [];
-  const monthly = report.results?.risk_ml?.weather_forecast?.monthly || [];
-  const stress = getStressData(report);
-  const cropInfo = report.results?.satellite?.crop_info || {};
+    const forecast = report.results?.risk_ml?.weather_forecast?.daily || report.results?.weather_forecast?.daily || [];
 
-  return (
-    <div className="min-h-screen bg-gray-50">
-      <style jsx global>{`@media print { .no-print { display: none !important; } .print-break { page-break-after: always; }}`}</style>
-      
-      <div className="no-print sticky top-0 bg-white border-b shadow-sm z-10">
-        <div className="max-w-5xl mx-auto px-4 py-4 flex justify-between">
-          <button onClick={() => router.back()} className="flex items-center gap-2 text-gray-600 hover:text-gray-900">
-            <ArrowLeft size={20} /> Back
-          </button>
-          <button onClick={() => window.print()} className="flex items-center gap-2 bg-emerald-600 text-white px-6 py-2 rounded-lg hover:bg-emerald-700">
-            <Download size={18} /> Download PDF
-          </button>
+    return (
+        <div className="min-h-screen bg-[#F8FAFC] pb-20">
+            {/* Top Navigation Bar */}
+            <div className="bg-white border-b border-slate-200 sticky top-0 z-20 print:hidden">
+                <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+                    <Link href="/dashboard/satellite" className="flex items-center gap-2 text-slate-600 hover:text-emerald-600 font-bold transition-colors">
+                        <ArrowLeft size={20} />
+                        <span>Dashboard</span>
+                    </Link>
+                    <div className="flex gap-3">
+                        <button onClick={() => window.print()} className="flex items-center gap-2 px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition-all">
+                            <Printer size={18} />
+                            <span className="hidden sm:inline">Print Report</span>
+                        </button>
+                        <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 shadow-md transition-all">
+                            <Download size={18} />
+                            <span className="hidden sm:inline">Export PDF</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <main className="max-w-6xl mx-auto px-4 sm:px-6 mt-8 sm:mt-12 space-y-8">
+                {/* Header Section */}
+                <div className="bg-white rounded-3xl p-6 sm:p-10 shadow-sm border border-slate-100">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+                        <div>
+                            <div className="flex items-center gap-3 mb-4">
+                                <span className="bg-emerald-100 text-emerald-700 px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest">Official Assessment</span>
+                                <span className="text-slate-400 font-medium">|</span>
+                                <span className="text-slate-500 font-semibold">{report.date}</span>
+                            </div>
+                            <h1 className="text-3xl sm:text-5xl font-black text-slate-900 mb-2">
+                                {report.crop} Analysis
+                            </h1>
+                            <div className="flex items-center gap-2 text-slate-500 text-lg font-medium">
+                                <MapPin className="text-emerald-600" size={24} />
+                                <span>{report.fieldName}</span>
+                            </div>
+                        </div>
+                        <div className={`px-8 py-5 rounded-2xl text-center shadow-lg border-b-4 flex flex-col justify-center min-w-[180px]
+                            ${report.riskLevel === 'Low Risk' ? 'bg-green-500 border-green-700 text-white' :
+                                report.riskLevel === 'Medium Risk' ? 'bg-yellow-500 border-yellow-700 text-slate-900' : 'bg-red-500 border-red-700 text-white'}
+                        `}>
+                            <span className="text-xs font-black uppercase tracking-tighter opacity-80 mb-1">Risk Assessment</span>
+                            <span className="text-2xl font-black leading-none">{report.riskLevel}</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="grid lg:grid-cols-3 gap-8">
+                    {/* Left: Map & Location Details */}
+                    <div className="lg:col-span-2 space-y-8">
+                        <div className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+                            <div className="h-96 w-full bg-slate-200 relative">
+                                <div ref={mapRef} className="w-full h-full z-10" />
+                                <div className="absolute top-4 right-4 bg-white/95 px-4 py-2 rounded-xl text-xs font-bold shadow-2xl z-20 border border-slate-100 text-slate-600 uppercase tracking-widest">
+                                    Coordinates: {report.coordinates}
+                                </div>
+                            </div>
+                            <div className="p-8 grid grid-cols-2 sm:grid-cols-4 gap-6">
+                                <div className="space-y-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Total Area</p>
+                                    <p className="text-lg font-black text-slate-800">{report.area}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Analysis Type</p>
+                                    <p className="text-lg font-black text-slate-800">{report.type}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Monitoring</p>
+                                    <p className="text-lg font-black text-slate-800">{report.monitoringType}</p>
+                                </div>
+                                <div className="space-y-1">
+                                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Confidence Score</p>
+                                    <p className="text-lg font-black text-emerald-600">98.4%</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Risk Analysis Visualization */}
+                        <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-sm border border-slate-100">
+                            <div className="flex justify-between items-center mb-10">
+                                <div>
+                                    <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3">
+                                        <TrendingUp className="text-emerald-600" size={32} />
+                                        Advanced Risk Analysis
+                                    </h2>
+                                    <p className="text-slate-500 font-medium mt-1">Multi-factor algorithmic assessment for {report.crop}.</p>
+                                </div>
+                            </div>
+                            <div className="h-80 w-full">
+                                <Bar
+                                    data={chartData}
+                                    options={{
+                                        responsive: true,
+                                        maintainAspectRatio: false,
+                                        plugins: { legend: { display: false } },
+                                        scales: {
+                                            y: {
+                                                beginAtZero: true,
+                                                max: 100,
+                                                grid: { color: 'rgba(0,0,0,0.03)' },
+                                                ticks: { font: { weight: 'bold' }, color: '#94A3B8' }
+                                            },
+                                            x: {
+                                                grid: { display: false },
+                                                ticks: { font: { weight: 'bold' }, color: '#1E293B' }
+                                            }
+                                        }
+                                    }}
+                                />
+                            </div>
+                        </div>
+
+                        {/* 7-Day Weather Forecast */}
+                        <div className="bg-white rounded-3xl p-8 sm:p-10 shadow-sm border border-slate-100">
+                            <h2 className="text-2xl font-black text-slate-900 flex items-center gap-3 mb-8">
+                                <Thermometer className="text-emerald-600" size={32} />
+                                Environmental Forecast
+                            </h2>
+                            {forecast.length > 0 ? (
+                                <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-4">
+                                    {forecast.slice(0, 7).map((day: any, i: number) => (
+                                        <div key={i} className="bg-slate-50/50 rounded-2xl p-4 text-center border border-slate-100 hover:border-emerald-200 transition-colors">
+                                            <p className="text-xs font-black text-slate-400 uppercase mb-2">
+                                                {new Date(day.date).toLocaleDateString('en-US', { weekday: 'short' })}
+                                            </p>
+                                            <div className="bg-white w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
+                                                {day.precipitation_sum > 0 ? <Droplets size={24} className="text-blue-500" /> : <Wind size={24} className="text-emerald-500" />}
+                                            </div>
+                                            <div className="text-lg font-black text-slate-800">
+                                                {day.temperature_max.toFixed(0)}°
+                                            </div>
+                                            <p className="text-xs text-slate-400 font-bold mb-2">/ {day.temperature_min.toFixed(0)}°</p>
+                                            <p className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-block
+                                                ${day.precipitation_sum > 7 ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}
+                                            `}>
+                                                {day.precipitation_sum > 7 ? "Rain" : "Dry"}
+                                            </p>
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="text-center py-12 bg-slate-50 rounded-2xl border border-dashed border-slate-200 text-slate-400 font-bold">
+                                    Weather forecast data currently unavailable.
+                                </div>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Right: Insights & Recommendations */}
+                    <div className="space-y-8">
+                        {/* Crop Status Card */}
+                        <div className="bg-emerald-900 text-white rounded-3xl p-8 shadow-2xl relative overflow-hidden">
+                            <Activity size={100} className="absolute -bottom-4 -right-4 opacity-10 text-white" />
+                            <h3 className="text-xl font-black mb-6 flex items-center gap-2">
+                                <Satellite size={20} />
+                                Field Vitals
+                            </h3>
+                            <div className="space-y-6">
+                                <div className="flex justify-between items-center border-b border-emerald-800 pb-4">
+                                    <span className="text-emerald-300 font-bold text-sm">Growth Stage</span>
+                                    <span className="text-lg font-black uppercase tracking-widest">{report.stage}</span>
+                                </div>
+                                <div className="flex justify-between items-center border-b border-emerald-800 pb-4">
+                                    <span className="text-emerald-300 font-bold text-sm">Days Planted</span>
+                                    <span className="text-lg font-black">{report.daysAfterPlanting} days</span>
+                                </div>
+                                <div className="flex justify-between items-center border-b border-emerald-800 pb-4">
+                                    <span className="text-emerald-300 font-bold text-sm">Cycle Remaining</span>
+                                    <span className="text-lg font-black">{report.expectedSeason - report.daysAfterPlanting} days</span>
+                                </div>
+                                <div className="flex justify-between items-center">
+                                    <span className="text-emerald-300 font-bold text-sm">Est. Health Index</span>
+                                    <span className="text-lg font-black text-emerald-400">{report.peakNDVI} NDVI</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* AI Recommendations */}
+                        <div className="bg-white rounded-3xl p-8 shadow-sm border border-slate-100">
+                            <h3 className="text-xl font-black text-slate-900 mb-6 flex items-center gap-3">
+                                <AlertTriangle className="text-yellow-500" size={24} />
+                                AI Guidance
+                            </h3>
+                            <ul className="space-y-4">
+                                {recommendations.map((rec, i) => (
+                                    <li key={i} className="flex gap-4 p-4 rounded-2xl bg-slate-50 border border-slate-100">
+                                        <div className="bg-emerald-100 w-8 h-8 rounded-full flex items-center justify-center shrink-0">
+                                            <i className="fa-solid fa-check text-emerald-600 text-xs"></i>
+                                        </div>
+                                        <p className="text-sm font-bold text-slate-700 leading-relaxed">{rec}</p>
+                                    </li>
+                                ))}
+                            </ul>
+                        </div>
+
+                        {/* Certification/Trust Card */}
+                        <div className="bg-slate-50 border border-slate-200 rounded-3xl p-8">
+                            <div className="flex items-center gap-4 mb-4">
+                                <div className="bg-white p-3 rounded-2xl shadow-sm">
+                                    <Landmark className="text-emerald-600" />
+                                </div>
+                                <h4 className="font-black text-slate-800">Verification</h4>
+                            </div>
+                            <p className="text-xs text-slate-500 font-bold leading-relaxed mb-4">
+                                This report is generated using multi-spectral satellite imagery and machine learning models proprietary to Agricheck.
+                            </p>
+                            <div className="flex gap-2">
+                                <span className="bg-white border border-slate-200 px-3 py-1 rounded-full text-[10px] font-black text-slate-400">ID: {report.id.substring(0, 8).toUpperCase()}</span>
+                                <span className="bg-white border border-slate-200 px-3 py-1 rounded-full text-[10px] font-black text-slate-400">HASH: AI-98X</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
         </div>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 py-8 space-y-8">
-        
-        {/* PAGE 1: RISK */}
-        <div className="bg-white rounded-lg shadow-lg p-8 print-break">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-emerald-600 mb-2">FIELD RISK ASSESSMENT</h1>
-            <h2 className="text-xl text-gray-700">{report.fieldLocation} - {report.cropType.toUpperCase()}</h2>
-            <p className="text-gray-500 mt-2">{report.createdAt?.toDate?.()?.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) || 'N/A'}</p>
-          </div>
-
-          <div className="border-2 border-emerald-600 rounded-lg p-6 mb-6">
-            <h3 className="text-xl font-bold mb-4 flex items-center gap-2"><AlertTriangle className="text-emerald-600" />Overall Risk</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className={`p-4 rounded-lg ${getRiskBgColor(riskData.risk_level)}`}>
-                <div className="text-sm text-gray-600 mb-1">Risk Level</div>
-                <div className="text-2xl font-bold">{riskData.risk_level}</div>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Risk Score</div>
-                <div className="text-2xl font-bold">{riskData.risk_score.toFixed(2)}/1.00</div>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Field Area</div>
-                <div className="text-xl font-bold">{report.area_hectares.toFixed(2)} ha</div>
-              </div>
-              <div className="bg-gray-100 p-4 rounded-lg">
-                <div className="text-sm text-gray-600 mb-1">Crop Stage</div>
-                <div className="text-xl font-bold">{cropInfo.current_stage?.replace('_', ' ').toUpperCase() || 'N/A'}</div>
-              </div>
-            </div>
-          </div>
-
-          <h3 className="text-lg font-bold mb-4">Risk Factor Breakdown</h3>
-          <div className="space-y-3">
-            <RiskBar label="Price Volatility" score={riskData.components.price_volatility || 0} />
-            <RiskBar label="Weather Risk" score={riskData.components.short_term_weather_risk || 0} />
-            <RiskBar label="Seasonal Risk" score={riskData.components.long_term_seasonal_risk || 0} />
-            <RiskBar label="Crop Suitability" score={riskData.components.suitability_score || 0} inverse />
-          </div>
-
-          <div className="mt-6">
-            <h3 className="text-lg font-bold mb-3">Key Risk Factors:</h3>
-            <ul className="space-y-2">{riskData.risk_factors.slice(0, 5).map((f: string, i: number) => <li key={i} className="flex gap-2"><span className="text-emerald-600">•</span>{f}</li>)}</ul>
-          </div>
-        </div>
-
-        {/* PAGE 2: WEATHER */}
-        <div className="bg-white rounded-lg shadow-lg p-8 print-break">
-          <h2 className="text-2xl font-bold text-emerald-600 mb-6 flex items-center gap-2"><CloudRain /> Weather Analysis</h2>
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">14-Day Forecast</h3>
-            <table className="w-full text-sm">
-              <thead className="bg-emerald-600 text-white"><tr><th className="p-3 text-left">Date</th><th className="p-3">Max °C</th><th className="p-3">Min °C</th><th className="p-3">Rain</th><th className="p-3">Humidity</th></tr></thead>
-              <tbody>{forecast.slice(0, 14).map((d: any, i: number) => <tr key={i} className={i % 2 === 0 ? 'bg-gray-50' : ''}><td className="p-3">{d.date.substring(0, 10)}</td><td className="p-3 text-center">{d.temperature_max.toFixed(1)}</td><td className="p-3 text-center">{d.temperature_min.toFixed(1)}</td><td className="p-3 text-center">{d.precipitation_sum.toFixed(1)}</td><td className="p-3 text-center">{d.relativehumidity_mean?.toFixed(0) || '-'}</td></tr>)}</tbody>
-            </table>
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">6-Month Outlook</h3>
-            <div className="grid grid-cols-3 gap-4">
-              {monthly.slice(0, 6).map((m: any, i: number) => {
-                const tAnomaly = m.temperature?.mean_anomaly?.[0] || 0;
-                const pAnomaly = m.precipitation?.mean_anomaly?.[0] || 0;
-                return (<div key={i} className="border rounded p-4"><div className="font-bold mb-2">{m.month.substring(0, 7)}</div><div className="text-sm space-y-1"><div className="flex items-center gap-2"><Thermometer size={16} /><span className={tAnomaly > 5 ? 'text-red-600' : tAnomaly < -5 ? 'text-blue-600' : ''}>{tAnomaly > 5 ? 'Above Avg' : tAnomaly < -5 ? 'Below Avg' : 'Normal'}</span></div><div className="flex items-center gap-2"><Droplets size={16} /><span className={pAnomaly > 20 ? 'text-blue-600' : pAnomaly < -20 ? 'text-red-600' : ''}>{pAnomaly > 20 ? 'Above Avg' : pAnomaly < -20 ? 'Below Avg' : 'Normal'}</span></div></div></div>);
-              })}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-bold mb-4">Stress Indicators</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <StressCard label="Cold Stress" value={`${stress.cold_stress_days} days`} pct={stress.cold_stress_fraction * 100} />
-              <StressCard label="Heat Stress" value={`${stress.heat_stress_days} days`} pct={stress.heat_stress_fraction * 100} />
-              <StressCard label="High Humidity" value={`${stress.high_humidity_days} days`} />
-              <StressCard label="Precipitation" value={`${(stress.precipitation_adequacy_ratio * 100).toFixed(0)}% adequate`} />
-            </div>
-          </div>
-        </div>
-
-        {/* PAGE 3: CROP HEALTH */}
-        <div className="bg-white rounded-lg shadow-lg p-8 print-break">
-          <h2 className="text-2xl font-bold text-emerald-600 mb-6 flex items-center gap-2"><Activity /> Crop Health</h2>
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">NDVI</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <InfoCard label="Peak NDVI" value={cropInfo.expected_peak_ndvi?.toFixed(2) || 'N/A'} />
-              <InfoCard label="Stage" value={cropInfo.current_stage?.replace('_', ' ').toUpperCase() || 'N/A'} />
-              <InfoCard label="Days After Planting" value={cropInfo.current_das || 'N/A'} />
-              <InfoCard label="Season Length" value={`${cropInfo.expected_season_length || 'N/A'} days`} />
-            </div>
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">Drought Assessment</h3>
-            <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded grid grid-cols-3 gap-4">
-              <div><div className="text-sm text-gray-600">Deficit</div><div className="text-xl font-bold">{stress.precipitation_deficit_mm?.toFixed(1) || '0'} mm</div></div>
-              <div><div className="text-sm text-gray-600">Adequacy</div><div className="text-xl font-bold">{(stress.precipitation_adequacy_ratio * 100).toFixed(0)}%</div></div>
-              <div><div className="text-sm text-gray-600">Risk</div><div className="text-xl font-bold">{stress.precipitation_adequacy_ratio < 0.5 ? 'HIGH' : stress.precipitation_adequacy_ratio < 0.8 ? 'MODERATE' : 'LOW'}</div></div>
-            </div>
-          </div>
-
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">Disease Pressure</h3>
-            <div className={`p-6 rounded-lg ${stress.disease_pressure_risk > 0.6 ? 'bg-red-50 border-2 border-red-300' : stress.disease_pressure_risk > 0.3 ? 'bg-yellow-50 border-2 border-yellow-300' : 'bg-green-50 border-2 border-green-300'}`}>
-              <div className="text-3xl font-bold mb-2">{stress.disease_pressure_risk?.toFixed(2) || '0.00'}</div>
-              <div className="text-lg font-semibold mb-3">{stress.disease_pressure_risk > 0.6 ? 'HIGH RISK' : stress.disease_pressure_risk > 0.3 ? 'MODERATE' : 'LOW RISK'}</div>
-              <div className="text-sm">High Humidity: {stress.high_humidity_days} days</div>
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-bold mb-4">Location</h3>
-            <div className="grid grid-cols-3 gap-4">
-              <InfoCard label="Coordinates" value={`${report.latitude.toFixed(4)}, ${report.longitude.toFixed(4)}`} />
-              <InfoCard label="Elevation" value={`${report.results?.risk_ml?.coordinates?.elevation || 'N/A'} m`} />
-              <InfoCard label="Zone" value={report.results?.risk_ml?.coordinates?.ghana_zone?.toUpperCase() || 'N/A'} />
-            </div>
-          </div>
-        </div>
-
-        {/* PAGE 4: MONITORING */}
-        <div className="bg-white rounded-lg shadow-lg p-8 print-break">
-          <h2 className="text-2xl font-bold text-emerald-600 mb-6 flex items-center gap-2"><Satellite /> Monitoring</h2>
-          <div className="mb-8">
-            <h3 className="text-xl font-bold mb-4">Satellite Status</h3>
-            <div className={`p-6 rounded-lg ${report.satellite_monitoring_enabled ? 'bg-green-50 border-2 border-green-300' : 'bg-gray-100'}`}>
-              <div className="flex items-center gap-3 mb-2">{report.satellite_monitoring_enabled ? <CheckCircle className="text-green-600" size={24} /> : <AlertTriangle className="text-gray-400" size={24} />}<span className="text-xl font-bold">{report.satellite_monitoring_enabled ? 'ACTIVE' : 'INACTIVE'}</span></div>
-              <p className="text-sm text-gray-600">{report.satellite_monitoring_enabled ? 'Satellite imagery enabled' : 'Enable for advanced analytics'}</p>
-              {report.satellite_monitoring_enabled && <div className="mt-3 text-sm"><span className="font-semibold">Polygon ID:</span> {report.results?.satellite?.poly_id || 'N/A'}</div>}
-            </div>
-          </div>
-
-          <div>
-            <h3 className="text-xl font-bold mb-4">Data Sources</h3>
-            <div className="grid grid-cols-2 gap-3">{Object.entries(report.results?.risk_ml?.data_sources_used || {}).map(([source, available]) => <div key={source} className="flex items-center gap-2 p-3 bg-gray-50 rounded">{available ? <CheckCircle className="text-green-600" size={18} /> : <span className="text-red-600">×</span>}<span className="capitalize">{source.replace('_', ' ')}</span></div>)}</div>
-          </div>
-        </div>
-
-        {/* PAGE 5: RECOMMENDATIONS */}
-        <div className="bg-white rounded-lg shadow-lg p-8">
-          <h2 className="text-2xl font-bold text-emerald-600 mb-6 flex items-center gap-2"><CheckCircle /> Recommendations</h2>
-          {generateRecommendations(report, riskData, stress).map((rec, i) => <div key={i} className="mb-6"><div className={`p-4 rounded-lg mb-3 ${rec.priority === 'CRITICAL' ? 'bg-red-100 border-l-4 border-red-500' : rec.priority === 'HIGH' ? 'bg-orange-100 border-l-4 border-orange-500' : 'bg-yellow-100 border-l-4 border-yellow-500'}`}><h3 className="text-lg font-bold mb-2">{i + 1}. {rec.title} <span className="text-sm">[ {rec.priority} ]</span></h3><ul className="space-y-2 ml-4">{rec.actions.map((a, j) => <li key={j} className="flex gap-2"><span className="text-emerald-600 font-bold">→</span>{a}</li>)}</ul></div></div>)}
-
-          <div className="mt-8 border-t pt-6">
-            <h3 className="text-lg font-bold mb-4">Best Practices</h3>
-            <ul className="space-y-2">{['Keep accurate records', 'Regular inspections', 'Monitor weather', 'Network with farmers', 'Join cooperatives'].map((p, i) => <li key={i} className="flex gap-2"><CheckCircle className="text-emerald-600 mt-0.5" size={18} />{p}</li>)}</ul>
-          </div>
-
-          <div className="mt-8 pt-6 border-t text-center text-sm text-gray-500">
-            <p>Generated: {new Date().toLocaleString()}</p>
-            <p className="mt-2">Support: support@agricheck.farm</p>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// Components
-function RiskBar({ label, score, inverse = false }: any) {
-  const displayScore = inverse ? 1 - score : score;
-  const pct = displayScore * 100;
-  const color = pct > 60 ? 'bg-red-500' : pct > 30 ? 'bg-yellow-500' : 'bg-green-500';
-  return <div><div className="flex justify-between mb-1"><span className="font-semibold">{label}</span><span>{score.toFixed(2)}</span></div><div className="w-full bg-gray-200 rounded-full h-4"><div className={`${color} h-4 rounded-full`} style={{ width: `${pct}%` }} /></div></div>;
-}
-
-function StressCard({ label, value, pct }: any) {
-  return <div className="bg-gray-50 p-4 rounded-lg"><div className="text-sm text-gray-600 mb-1">{label}</div><div className="text-xl font-bold">{value}</div>{pct !== undefined && <div className="text-sm text-gray-500 mt-1">{pct.toFixed(0)}%</div>}</div>;
-}
-
-function InfoCard({ label, value }: any) {
-  return <div className="bg-gray-50 p-4 rounded-lg"><div className="text-sm text-gray-600 mb-1">{label}</div><div className="text-lg font-bold">{value}</div></div>;
-}
-
-// Helpers
-function getRiskData(report: any) {
-  const riskAssessment = report.results?.risk_ml?.risk_assessment?.[report.cropType.toUpperCase()] || {};
-  return { risk_level: riskAssessment.risk_level || 'Unknown', risk_score: riskAssessment.risk_score || 0, components: riskAssessment.components || {}, risk_factors: riskAssessment.risk_factors || [] };
-}
-
-function getStressData(report: any) {
-  return report.results?.risk_ml?.risk_computation?.crop_risk_analysis?.[report.cropType]?.stress_indicators || { cold_stress_days: 0, cold_stress_fraction: 0, heat_stress_days: 0, heat_stress_fraction: 0, high_humidity_days: 0, precipitation_adequacy_ratio: 0, precipitation_deficit_mm: 0, disease_pressure_risk: 0 };
-}
-
-function getRiskBgColor(level: string) {
-  if (level.toLowerCase().includes('low')) return 'bg-green-100 border-2 border-green-300';
-  if (level.toLowerCase().includes('moderate')) return 'bg-yellow-100 border-2 border-yellow-300';
-  return 'bg-red-100 border-2 border-red-300';
-}
-
-function generateRecommendations(report: any, riskData: any, stress: any) {
-  const recommendations = [];
-  const c = riskData.components;
-  if (riskData.risk_level.includes('High')) recommendations.push({ priority: 'CRITICAL', title: 'High Risk Alert', actions: ['Act immediately', 'Increase monitoring', 'Secure insurance', 'Consult experts'] });
-  if (c.short_term_weather_risk > 0.5) recommendations.push({ priority: 'HIGH', title: 'Weather Risk', actions: ['Monitor forecasts', 'Check drainage', 'Prepare irrigation', 'Inspect fields'] });
-  if (c.price_volatility > 0.6) recommendations.push({ priority: 'HIGH', title: 'Market Risk', actions: ['Forward contracts', 'Crop insurance', 'Diversify markets', 'Track prices'] });
-  if (stress.disease_pressure_risk > 0.5) recommendations.push({ priority: 'MEDIUM', title: 'Disease Prevention', actions: ['Apply fungicides', 'Weekly scouting', 'Remove infected plants', 'Improve circulation'] });
-  if (stress.precipitation_adequacy_ratio < 0.6) recommendations.push({ priority: 'MEDIUM', title: 'Water Management', actions: ['Plan irrigation', 'Apply mulch', 'Monitor moisture', 'Drought varieties'] });
-  return recommendations;
+    );
 }

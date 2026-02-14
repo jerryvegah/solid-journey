@@ -116,32 +116,34 @@ export default function ContractsPage() {
         }
     };
 
+    // Show loading indicator until both auth and data fetch are complete
     if (authLoading || loading) {
         return (
-            <div className="max-w-7xl mx-auto">
-                <div className="flex justify-center items-center h-64">
-                    <div className="text-slate-500 text-lg">Loading contracts...</div>
-                </div>
+            <div className="max-w-7xl mx-auto px-4 py-20 flex flex-col justify-center items-center min-h-[400px]">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-500 mb-4"></div>
+                <div className="text-slate-500 text-lg font-medium">Gathering your contracts...</div>
             </div>
         );
     }
 
     if (!user) {
         return (
-            <div className="max-w-7xl mx-auto">
-                <div className="flex justify-center items-center h-64">
-                    <div className="text-slate-500 text-lg">Please sign in to view contracts.</div>
-                </div>
+            <div className="max-w-7xl mx-auto px-4 py-20 text-center">
+                <FileText size={48} className="mx-auto text-slate-300 mb-4" />
+                <div className="text-slate-500 text-lg">Please sign in to view your active contracts.</div>
             </div>
         );
     }
 
     return (
-        <div className="max-w-7xl mx-auto">
-            <div className="flex justify-between items-center mb-8">
-                <h1 className="text-3xl font-bold text-slate-800">Farmer Contracts</h1>
-                <div className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-bold shadow-sm">
-                    {contracts.length} Contract{contracts.length !== 1 ? 's' : ''}
+        <div className="max-w-7xl mx-auto px-4 relative pb-20">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
+                <div>
+                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Farmer Contracts</h1>
+                    <p className="text-slate-500 mt-1">Review your Buy Now Pay Later agreements and payment schedules.</p>
+                </div>
+                <div className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-bold shadow-sm whitespace-nowrap">
+                    {contracts.length} Active Contract{contracts.length !== 1 ? 's' : ''}
                 </div>
             </div>
 

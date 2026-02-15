@@ -40,7 +40,7 @@ export const initiateCheckout = (
             customizations: {
                 title: metadata.title,
                 description: metadata.description,
-                logo: metadata.logo || "https://agricheck.farm/assets/images/favicon.png",
+                logo: metadata.logo || "https://agricheck.farm/favicon.png",
             },
             callback: (data: any) => {
                 if (data.status === "successful") {

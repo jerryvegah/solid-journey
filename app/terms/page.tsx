@@ -33,7 +33,7 @@ export default function TermsOfServicePage() {
 
                     <section>
                         <h2 className="text-xl font-bold text-slate-900 mb-3">4. Limitation of Liability</h2>
-                        <p>In no event shall Agricheck be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your use of the services.</p>
+                        <p>In no event shall Agricheck be liable for any indirect, incidental, special, consequential, or punitive damages arising out of or related to your use of the services. This is risk analysis and we may be wrong and ask that you verify the data.</p>
                     </section>
 
                     <section>
@@ -43,7 +43,7 @@ export default function TermsOfServicePage() {
 
                     <section>
                         <h2 className="text-xl font-bold text-slate-900 mb-3">6. Contact Us</h2>
-                        <p>If you have any questions about these Terms, please contact us at support@agricheck.farm.</p>
+                        <p>If you have any questions about these Terms, please contact us at info@agricheck.farm.</p>
                     </section>
                 </div>
             </div>

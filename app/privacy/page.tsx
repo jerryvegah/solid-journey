@@ -18,7 +18,7 @@ export default function PrivacyPolicyPage() {
                 <div className="space-y-6 text-slate-700 leading-relaxed">
                     <section>
                         <h2 className="text-xl font-bold text-slate-900 mb-3">1. Information We Collect</h2>
-                        <p>We collect information you provide directly to us, such as when you create an account, update your profile, or use our satellite analysis tools. This includes your name, email address, and farm data.</p>
+                        <p>We collect information you provide directly to us, such as when you create an account, update your profile, or use our satellite analysis tools. This includes your name, email address, phone number and farm data.</p>
                     </section>
 
                     <section>
@@ -43,7 +43,7 @@ export default function PrivacyPolicyPage() {
 
                     <section>
                         <h2 className="text-xl font-bold text-slate-900 mb-3">6. Contact Us</h2>
-                        <p>If you have any questions about this Privacy Policy, please contact us at privacy@agricheck.farm.</p>
+                        <p>If you have any questions about this Privacy Policy, please contact us at info@agricheck.farm.</p>
                     </section>
                 </div>
             </div>

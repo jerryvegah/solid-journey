@@ -24,6 +24,7 @@ export default function MapPage() {
     // Paywall States
     const [assessmentCount, setAssessmentCount] = useState(0);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
+    const [paymentApproved, setPaymentApproved] = useState(false); // NEW: Track if payment was made
 
     // Field Boundary Form States
     const [boundaryCropType, setBoundaryCropType] = useState('maize');
@@ -52,7 +53,7 @@ export default function MapPage() {
     useEffect(() => {
         const wakeUpEngines = async () => {
             try {
-                const WAKE_UP_COOLDOWN = 10 * 60 * 1000; // 10 minutes
+                const WAKE_UP_COOLDOWN = 10 * 60 * 1000;
                 const STORAGE_KEY = 'agricheck_backend_wakeup';
                 
                 const lastWakeUpStr = localStorage.getItem(STORAGE_KEY);
@@ -61,7 +62,7 @@ export default function MapPage() {
                 if (lastWakeUpStr) {
                     const lastWakeUp = parseInt(lastWakeUpStr);
                     if (now - lastWakeUp < WAKE_UP_COOLDOWN) {
-                        console.log('⏰ Backends were recently warmed up. Checking readiness...');
+                        console.log('⏰ Backends recently warmed up');
                         setBackendStatus('warming');
                         const isReady = await quickHealthCheck();
                         if (isReady) {
@@ -74,7 +75,7 @@ export default function MapPage() {
                 }
                 
                 localStorage.setItem(STORAGE_KEY, now.toString());
-                console.log('🚀 Waking up backends silently...');
+                console.log('🚀 Waking up backends...');
                 setBackendStatus('warming');
                 
                 const TIMEOUT = 30000;
@@ -103,7 +104,7 @@ export default function MapPage() {
                 }
                 
             } catch (error) {
-                console.warn('⚠️ Backend wake-up encountered an issue (non-critical)');
+                console.warn('⚠️ Backend wake-up issue (non-critical)');
                 setBackendStatus('warming');
                 monitorBackendReadiness();
             }
@@ -287,7 +288,7 @@ export default function MapPage() {
         };
     }, []);
 
-    // Load user's assessment count (NO premium check anymore)
+    // Load user's assessment count
     useEffect(() => {
         const loadUserData = async () => {
             if (!user || !db) return;
@@ -388,8 +389,8 @@ export default function MapPage() {
             return;
         }
 
-        // NEW: EVERYONE pays after 2 free assessments (premium or not)
-        if (assessmentCount >= 2) {
+        // CHECK: If user has 2+ assessments AND hasn't paid for this one yet
+        if (assessmentCount >= 2 && !paymentApproved) {
             setShowPaymentModal(true);
             return;
         }
@@ -399,6 +400,14 @@ export default function MapPage() {
             showAlert("Processing engines are starting up. Please wait 10-20 seconds and try again.", "warning");
             return;
         }
+
+        // Run the analysis
+        await runFieldAnalysis();
+    };
+
+    // SIMPLIFIED: Just run the analysis (no payment logic here)
+    const runFieldAnalysis = async () => {
+        if (!user?.uid || !fieldData || !db) return;
 
         setIsLoading(true);
         setLoadingMessage('Analyzing your field...');
@@ -472,6 +481,8 @@ export default function MapPage() {
                 createdAt: serverTimestamp()
             });
 
+            // Reset payment approval for next assessment
+            setPaymentApproved(false);
             setAssessmentCount(prev => prev + 1);
 
             showAlert("Comprehensive Analysis Complete! Redirecting to reports...", 'success');
@@ -631,8 +642,11 @@ export default function MapPage() {
                                 <Lock size={40} className="text-amber-600" />
                             </div>
                             <h2 className="text-2xl font-bold text-slate-800 mb-4">Payment Required</h2>
+                            <p className="text-slate-600 mb-2 leading-relaxed">
+                                You've completed <strong>{assessmentCount} assessments</strong>.
+                            </p>
                             <p className="text-slate-600 mb-8 leading-relaxed">
-                                You have used your <strong>2 free assessments</strong>. Each additional field analysis requires a one-time payment.
+                                Your first <strong>2 assessments are free</strong>. Each additional analysis requires payment before processing.
                             </p>
 
                             <div className="space-y-3">
@@ -647,9 +661,9 @@ export default function MapPage() {
                                                     uid: user.uid
                                                 },
                                                 'GHS',
-                                                'ASSESSMENT',
+                                                'PREMIUM', // Using 'PREMIUM' but it's just a gate
                                                 {
-                                                    title: "Field Assessment",
+                                                    title: `Field Assessment #${assessmentCount + 1}`,
                                                     description: "Comprehensive Field Analysis & Satellite Monitoring"
                                                 },
                                                 async (ref) => {
@@ -659,23 +673,26 @@ export default function MapPage() {
                                                             return;
                                                         }
                                                         
-                                                        // Record the payment but don't change premium status
+                                                        // Just record the payment - no premium status change
                                                         const userRef = doc(db, 'users', user.uid);
                                                         await updateDoc(userRef, {
                                                             lastPaymentRef: ref,
                                                             lastPaymentDate: serverTimestamp()
                                                         });
                                                         
+                                                        // Approve payment and close modal
+                                                        setPaymentApproved(true);
                                                         setShowPaymentModal(false);
-                                                        showAlert("Payment Successful! Proceeding with analysis...", "success");
+                                                        showAlert("Payment successful! Running analysis...", "success");
                                                         
-                                                        // Proceed with the field submission
-                                                        // We need to trigger the analysis now
-                                                        handleFieldSubmitAfterPayment();
+                                                        // Auto-run the analysis
+                                                        setTimeout(() => {
+                                                            runFieldAnalysis();
+                                                        }, 1000);
                                                         
                                                     } catch (err) {
                                                         console.error("Error recording payment:", err);
-                                                        showAlert("Payment OK, but failed to record. Please contact support.", "error");
+                                                        showAlert("Payment successful, but failed to record. Please contact support.", "error");
                                                     }
                                                 }
                                             );
@@ -683,7 +700,7 @@ export default function MapPage() {
                                     }}
                                 >
                                     <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
-                                    Pay for This Assessment
+                                    Pay & Run Assessment
                                 </button>
                                 <button
                                     className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-xl hover:bg-slate-200 transition-all"
@@ -695,7 +712,7 @@ export default function MapPage() {
                         </div>
                         <div className="bg-slate-50 p-4 border-t border-slate-100">
                             <p className="text-xs text-slate-400">
-                                Your first 2 assessments are free. Additional analyses are pay-per-use.
+                                First 2 assessments free. Assessments 3+ require payment.
                             </p>
                         </div>
                     </div>
@@ -703,95 +720,4 @@ export default function MapPage() {
             )}
         </div>
     );
-
-    // NEW: Function to submit field after payment
-    async function handleFieldSubmitAfterPayment() {
-        if (!user?.uid || !fieldData || !db) return;
-
-        setIsLoading(true);
-        setLoadingMessage('Analyzing your field...');
-
-        try {
-            const riskPayload = {
-                latitude: fieldData.center.lat,
-                longitude: fieldData.center.lng,
-                crop_type: boundaryCropType.toLowerCase(),
-                elevation: 1200
-            };
-
-            const boundaryPayload = {
-                crop_type: boundaryCropType.toLowerCase(),
-                field_location: boundaryDescription,
-                field_coordinates: fieldData.coordinates,
-                planting_date: datePlanted,
-                latitude: fieldData.center.lat,
-                longitude: fieldData.center.lng
-            };
-
-            const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
-                for (let i = 0; i <= retries; i++) {
-                    try {
-                        const response = await fetch(url, options);
-                        if (response.ok) return response;
-                        if (i === retries) throw new Error(`Request failed after ${retries} retries`);
-                    } catch (error) {
-                        if (i === retries) throw error;
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                    }
-                }
-                throw new Error('Retry loop exhausted');
-            };
-
-            const [riskRes, satelliteRes] = await Promise.all([
-                fetchWithRetry(POINT_ASSESSMENT_API_URL, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(riskPayload)
-                }),
-                fetchWithRetry(FIELD_BOUNDARY_API_URL, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'X-User-ID': user.uid
-                    },
-                    body: JSON.stringify(boundaryPayload)
-                })
-            ]);
-
-            const riskData = await riskRes.json();
-            const satelliteData = await satelliteRes.json();
-
-            await addDoc(collection(db, 'assessments'), {
-                userId: user.uid,
-                userEmail: user.email,
-                type: 'comprehensive_analysis',
-                cropType: boundaryCropType,
-                fieldLocation: boundaryDescription,
-                latitude: fieldData.center.lat,
-                longitude: fieldData.center.lng,
-                fieldCoordinates: JSON.stringify(fieldData.coordinates),
-                datePlanted,
-                results: {
-                    satellite: satelliteData,
-                    risk_ml: riskData
-                },
-                area_hectares: fieldData.hectares,
-                satellite_monitoring_enabled: true,
-                createdAt: serverTimestamp()
-            });
-
-            setAssessmentCount(prev => prev + 1);
-            showAlert("Analysis Complete! Redirecting...", 'success');
-            
-            setTimeout(() => {
-                router.push('/dashboard/satellite');
-            }, 2000);
-
-        } catch (error: any) {
-            console.error("Analysis Error:", error);
-            showAlert("Connection error. Please try again.", "error");
-        } finally {
-            setIsLoading(false);
-        }
-    }
 }

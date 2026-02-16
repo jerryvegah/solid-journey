@@ -2,7 +2,7 @@
 
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
@@ -17,6 +17,9 @@ export default function MapPage() {
     const drawnItemsRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState('Initializing map...');
+    
+    // NEW: Backend status tracking
+    const [backendStatus, setBackendStatus] = useState<'unknown' | 'warming' | 'ready'>('unknown');
 
     // Paywall States
     const [assessmentCount, setAssessmentCount] = useState(0);
@@ -46,40 +49,185 @@ export default function MapPage() {
         setTimeout(() => setAlert(null), 5000);
     };
 
-    // Wake up BOTH backends on page load (with cooldown)
+    // IMPROVED: Non-blocking background wake-up
     useEffect(() => {
         const wakeUpEngines = async () => {
-            // Check last wake-up time from localStorage
-            const lastWakeUp = localStorage.getItem('backend_last_wakeup');
-            const now = Date.now();
-            const twentyMinutes = 20 * 60 * 1000; // 20 minutes in milliseconds
-
-            // If we woke up the backends less than 20 minutes ago, skip
-            if (lastWakeUp && (now - parseInt(lastWakeUp)) < twentyMinutes) {
-                console.log("⏰ Backends were recently warmed up. Skipping wake-up call.");
+            if (!db) {
+                console.log('❌ Firestore not initialized, skipping distributed wake-up');
                 return;
             }
 
             try {
-                console.log("🚀 Waking up AgriCheck Engines (Satellite & Risk)...");
+                const WAKE_UP_COOLDOWN = 15 * 60 * 1000; // 15 minutes
+                const LOCK_DURATION = 2 * 60 * 1000; // 2 minutes lock
+                const QUICK_CHECK_TIMEOUT = 5000; // 5 seconds for quick health check
                 
-                // Ping both concurrently to save time
-                await Promise.all([
-                    fetch(`${SATELLITE_BACKEND}/health`),
-                    fetch(`${RISK_BACKEND}/health`)
+                // Reference to the wake-up status document
+                const wakeUpRef = doc(db, 'system', 'backend_wakeup_status');
+                
+                // Get current wake-up status
+                const wakeUpDoc = await getDoc(wakeUpRef);
+                const now = Date.now();
+                
+                if (wakeUpDoc.exists()) {
+                    const data = wakeUpDoc.data();
+                    const lastWakeUp = data.lastWakeUpTime?.toMillis() || 0;
+                    const lockExpiry = data.lockExpiry?.toMillis() || 0;
+                    
+                    // Check if we're within cooldown period
+                    if (now - lastWakeUp < WAKE_UP_COOLDOWN) {
+                        console.log('⏰ Backends were recently warmed up. Checking if they\'re ready...');
+                        
+                        // Do a quick health check
+                        setBackendStatus('warming');
+                        const isReady = await quickHealthCheck();
+                        if (isReady) {
+                            console.log('✅ Backends are ready!');
+                            setBackendStatus('ready');
+                        } else {
+                            console.log('⏳ Backends still warming up...');
+                            // Continue monitoring in background
+                            monitorBackendReadiness();
+                        }
+                        return;
+                    }
+                    
+                    // Check if another user is currently waking up the backends
+                    if (data.isWakingUp && now < lockExpiry) {
+                        console.log('🔒 Another user is currently waking up the backends.');
+                        setBackendStatus('warming');
+                        // Monitor in background
+                        monitorBackendReadiness();
+                        return;
+                    }
+                }
+                
+                // Acquire the lock and wake up backends
+                console.log('🔐 Acquiring wake-up lock...');
+                setBackendStatus('warming');
+                
+                await setDoc(wakeUpRef, {
+                    isWakingUp: true,
+                    lockExpiry: new Date(now + LOCK_DURATION),
+                    lastWakeUpTime: new Date(now),
+                    wakeUpBy: user?.uid || 'anonymous',
+                    wakeUpEmail: user?.email || 'anonymous'
+                }, { merge: true });
+                
+                console.log('🚀 Waking up AgriCheck Engines in background...');
+                
+                // Ping both backends concurrently with timeout
+                const TIMEOUT = 30000; // 30 seconds timeout
+                
+                const fetchWithTimeout = (url: string, timeout: number) => {
+                    return Promise.race([
+                        fetch(url),
+                        new Promise<Response>((_, reject) => 
+                            setTimeout(() => reject(new Error('Timeout')), timeout)
+                        )
+                    ]);
+                };
+                
+                const results = await Promise.allSettled([
+                    fetchWithTimeout(`${SATELLITE_BACKEND}/health`, TIMEOUT),
+                    fetchWithTimeout(`${RISK_BACKEND}/health`, TIMEOUT)
                 ]);
                 
-                // Store the current timestamp
-                localStorage.setItem('backend_last_wakeup', now.toString());
-                console.log("✅ Both AgriCheck Engines are warming up...");
-            } catch (e) {
-                console.warn("⚠️ One or more engines are still sleeping...");
+                const successCount = results.filter(r => r.status === 'fulfilled').length;
+                console.log(`✅ ${successCount}/2 backends responded`);
+                
+                // Release the lock
+                await setDoc(wakeUpRef, {
+                    isWakingUp: false,
+                    lastWakeUpTime: new Date(),
+                    lastWakeUpSuccess: successCount === 2,
+                    wakeUpBy: user?.uid || 'anonymous'
+                }, { merge: true });
+                
+                if (successCount === 2) {
+                    setBackendStatus('ready');
+                    console.log('✅ All backends ready!');
+                } else {
+                    console.warn('⚠️ Some backends did not respond. Monitoring...');
+                    monitorBackendReadiness();
+                }
+                
+            } catch (error) {
+                console.error('💥 Error during wake-up process:', error);
+                setBackendStatus('warming');
+                
+                // Release the lock on error
+                if (db) {
+                    try {
+                        const wakeUpRef = doc(db, 'system', 'backend_wakeup_status');
+                        await setDoc(wakeUpRef, {
+                            isWakingUp: false,
+                            lastError: error instanceof Error ? error.message : 'Unknown error',
+                            lastErrorTime: new Date()
+                        }, { merge: true });
+                    } catch (releaseError) {
+                        console.error('Failed to release lock:', releaseError);
+                    }
+                }
+                
+                // Continue monitoring
+                monitorBackendReadiness();
             }
         };
+        
+        // Start wake-up process in background (non-blocking)
         wakeUpEngines();
-    }, []);
+    }, [db, user]);
 
-    // Initialize Map
+    // NEW: Quick health check function
+    const quickHealthCheck = async (): Promise<boolean> => {
+        try {
+            const QUICK_TIMEOUT = 5000; // 5 seconds
+            
+            const fetchWithTimeout = (url: string, timeout: number) => {
+                return Promise.race([
+                    fetch(url, { method: 'HEAD' }), // HEAD request is faster
+                    new Promise<Response>((_, reject) => 
+                        setTimeout(() => reject(new Error('Timeout')), timeout)
+                    )
+                ]);
+            };
+            
+            const results = await Promise.allSettled([
+                fetchWithTimeout(`${SATELLITE_BACKEND}/health`, QUICK_TIMEOUT),
+                fetchWithTimeout(`${RISK_BACKEND}/health`, QUICK_TIMEOUT)
+            ]);
+            
+            const successCount = results.filter(r => r.status === 'fulfilled').length;
+            return successCount === 2;
+        } catch {
+            return false;
+        }
+    };
+
+    // NEW: Monitor backend readiness in background
+    const monitorBackendReadiness = () => {
+        let attempts = 0;
+        const maxAttempts = 6; // 6 attempts = 60 seconds max
+        
+        const checkInterval = setInterval(async () => {
+            attempts++;
+            console.log(`🔍 Checking backend readiness... (Attempt ${attempts}/${maxAttempts})`);
+            
+            const isReady = await quickHealthCheck();
+            
+            if (isReady) {
+                console.log('✅ Backends are now ready!');
+                setBackendStatus('ready');
+                clearInterval(checkInterval);
+            } else if (attempts >= maxAttempts) {
+                console.log('⏱️ Backend readiness check timed out. They may still be warming up.');
+                clearInterval(checkInterval);
+            }
+        }, 10000); // Check every 10 seconds
+    };
+
+    // Initialize Map (NOW NON-BLOCKING!)
     useEffect(() => {
         let map: any;
 
@@ -106,7 +254,6 @@ export default function MapPage() {
                         },
                         (error) => {
                             console.error("Geolocation error:", error);
-                            showAlert("Could not get your location. Defaulting to Ghana.", 'warning');
                             setupMap(L, 5.6037, -0.1870);
                         }
                     );
@@ -200,6 +347,7 @@ export default function MapPage() {
                 setAutoRegistrationStatus(null);
             });
 
+            // Map is ready - remove loading spinner
             setIsLoading(false);
         };
 
@@ -330,8 +478,14 @@ export default function MapPage() {
             return;
         }
 
+        // Check backend status before submitting
+        if (backendStatus === 'warming') {
+            showAlert("AgriCheck engines are still warming up. Please wait 10-30 seconds and try again.", "warning");
+            return;
+        }
+
         setIsLoading(true);
-        setLoadingMessage('Syncing data with Satellite and Risk engines...');
+        setLoadingMessage('Analyzing your field...');
 
         try {
             const riskPayload = {
@@ -350,13 +504,28 @@ export default function MapPage() {
                 longitude: fieldData.center.lng
             };
 
+            // Add retry logic for backend calls
+            const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.ok) return response;
+                        if (i === retries) throw new Error(`Request failed after ${retries} retries`);
+                    } catch (error) {
+                        if (i === retries) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                    }
+                }
+                throw new Error('Retry loop exhausted');
+            };
+
             const [riskRes, satelliteRes] = await Promise.all([
-                fetch(POINT_ASSESSMENT_API_URL, {
+                fetchWithRetry(POINT_ASSESSMENT_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(riskPayload)
                 }),
-                fetch(FIELD_BOUNDARY_API_URL, {
+                fetchWithRetry(FIELD_BOUNDARY_API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -392,14 +561,13 @@ export default function MapPage() {
 
             showAlert("Comprehensive Analysis Complete! Redirecting to reports...", 'success');
             
-            // Redirect to satellite reports page after 2 seconds
             setTimeout(() => {
                 router.push('/dashboard/satellite');
             }, 2000);
 
         } catch (error: any) {
             console.error("Analysis Error:", error);
-            showAlert("Connection error. Please try again.", "error");
+            showAlert("Connection error. The backends may still be starting up. Please try again in 30 seconds.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -422,6 +590,17 @@ export default function MapPage() {
                                 'bg-blue-50 border-blue-500 text-blue-800'}`}>
                     <Info size={20} />
                     <span className="font-bold">{alert.message}</span>
+                </div>
+            )}
+
+            {/* NEW: Backend Status Indicator */}
+            {backendStatus === 'warming' && (
+                <div className="fixed bottom-4 right-4 z-[9999] px-4 py-3 rounded-xl shadow-lg bg-blue-50 border-l-4 border-blue-500 flex items-center gap-3 animate-pulse">
+                    <Loader2 size={18} className="animate-spin text-blue-600" />
+                    <div>
+                        <p className="text-blue-800 font-bold text-sm">AgriCheck Engines Warming Up...</p>
+                        <p className="text-blue-600 text-xs">You can draw your field now. Submit in 10-30 seconds.</p>
+                    </div>
                 </div>
             )}
 

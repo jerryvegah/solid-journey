@@ -284,23 +284,23 @@ export default function LandingPage() {
         </div>
       </section>
 
-      {/* VIDEO SECTION */}
-      <section className="py-24 bg-white">
-        <div className="container mx-auto px-6 text-center">
-          <h2 className="text-4xl font-bold text-emerald-900 mb-6">{t.video_title}</h2>
-          <p className="text-slate-600 mb-12 max-w-2xl mx-auto">{t.video_desc}</p>
-          <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
-            <iframe
-              className="absolute inset-0 w-full h-full"
-              src="https://www.youtube.com/embed/sNZVqzSBxnY"
-              title="Agricheck Platform Demo"
-              frameBorder="0"
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-            ></iframe>
-          </div>
-        </div>
-      </section>
+     {/* VIDEO SECTION */}
+<section className="py-24 bg-white">
+  <div className="container mx-auto px-6 text-center">
+    <h2 className="text-4xl font-bold text-emerald-900 mb-6">{t.video_title}</h2>
+    <p className="text-slate-600 mb-12 max-w-2xl mx-auto">{t.video_desc}</p>
+    <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
+      <iframe
+        className="absolute inset-0 w-full h-full"
+        src="https://www.youtube.com/embed/oJFKbU-Xbe8"
+        title="Agricheck Platform Demo"
+        frameBorder="0"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowFullScreen
+      ></iframe>
+    </div>
+  </div>
+</section>
 
       {/* FOOTER */}
       <footer className="bg-slate-900 text-white py-12">

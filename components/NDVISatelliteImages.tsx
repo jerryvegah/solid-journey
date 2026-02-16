@@ -1,5 +1,5 @@
 // components/NDVISatelliteImages.tsx
-// FIXED: Handles pre-planting scenario correctly
+// COMPLETE FIX: HTTPS + Pre-Planting Detection + Mobile Responsive
 "use client";
 
 import { useEffect, useState } from 'react';
@@ -61,21 +61,20 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
       setLoading(true);
       setError(null);
 
-      console.log('🔄 Loading satellite data directly from Agromonitoring for poly_id:', polyId);
+      console.log('🔄 Loading satellite data from Agromonitoring for poly_id:', polyId);
 
       const AGRO_API_KEY = process.env.NEXT_PUBLIC_AGRO_API_KEY;
       
       if (!AGRO_API_KEY) {
-        console.error('❌ AGRO_API_KEY not configured in environment');
+        console.error('❌ AGRO_API_KEY not configured');
         setError('Satellite monitoring not configured');
         setLoading(false);
         return;
       }
 
       const endDate = Math.floor(Date.now() / 1000);
-      const startDate = endDate - (60 * 24 * 60 * 60); // 60 days ago
+      const startDate = endDate - (60 * 24 * 60 * 60);
 
-      // Call Agromonitoring with stats included
       const imageSearchUrl = `https://api.agromonitoring.com/agro/1.0/image/search?start=${startDate}&end=${endDate}&polyid=${polyId}&appid=${AGRO_API_KEY}`;
       
       console.log('📡 Calling Agromonitoring API...');
@@ -90,11 +89,11 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
       }
 
       const imagery = await response.json();
-      console.log('✅ Agromonitoring API response:', imagery);
+      console.log('✅ Agromonitoring API response:', imagery.length, 'images');
 
       if (!imagery || imagery.length === 0) {
-        console.warn('⚠️ No imagery data returned from Agromonitoring');
-        setError('No satellite imagery available for this field');
+        console.warn('⚠️ No imagery data returned');
+        setError('No satellite imagery available');
         setImageryData([]);
         setLoading(false);
         return;
@@ -105,31 +104,26 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
         imagery.map(async (img: any) => {
           let ndviMean = 0;
           
-          // METHOD 1: Check if stats are already in the response
           if (img.stats?.ndvi) {
             if (typeof img.stats.ndvi === 'object' && img.stats.ndvi.mean !== undefined) {
               ndviMean = img.stats.ndvi.mean;
-              console.log('✅ Found NDVI stats in response:', ndviMean);
             } else if (typeof img.stats.ndvi === 'string') {
-              // Stats URL - need to fetch
               try {
-                console.log('🔄 Fetching NDVI stats from:', img.stats.ndvi);
-                const statsResponse = await fetch(img.stats.ndvi);
+                // ✅ CRITICAL FIX: Force HTTPS to prevent mixed content errors
+                const statsUrl = img.stats.ndvi.replace('http://', 'https://');
+                const statsResponse = await fetch(statsUrl);
                 if (statsResponse.ok) {
                   const statsData = await statsResponse.json();
                   ndviMean = statsData.mean || 0;
-                  console.log('✅ Fetched NDVI stats:', ndviMean);
                 }
               } catch (err) {
-                console.error('❌ Failed to fetch NDVI stats:', err);
+                console.error('❌ Stats fetch failed:', err);
               }
             }
           }
           
-          // METHOD 2: Check if there's a data.mean field
           if (ndviMean === 0 && img.data?.mean) {
             ndviMean = img.data.mean;
-            console.log('✅ Found NDVI in data.mean:', ndviMean);
           }
 
           const cloudCoverage = img.cl !== undefined ? img.cl : (img.cloud || 0);
@@ -143,37 +137,27 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
             available_types: img.image ? Object.keys(img.image) : [],
             satellite: img.type || 'Unknown',
             images: {
-              ndvi: img.image?.ndvi,
-              truecolor: img.image?.truecolor,
-              falsecolor: img.image?.falsecolor
+              // ✅ Force HTTPS on image URLs too
+              ndvi: img.image?.ndvi?.replace('http://', 'https://'),
+              truecolor: img.image?.truecolor?.replace('http://', 'https://'),
+              falsecolor: img.image?.falsecolor?.replace('http://', 'https://')
             },
             health_status: getNDVIHealthStatus(ndviMean)
           };
         })
       );
 
-      // Sort by date (newest first)
       transformedImagery.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-
-      console.log('✅ Transformed imagery with NDVI values:', transformedImagery);
+      console.log('✅ Transformed imagery:', transformedImagery.length);
       setImageryData(transformedImagery);
 
-      // ✅ NEW: Check if field is pre-planting
+      // Check pre-planting status
       const plantingDateStr = cropInfo?.planting_date;
       const isPrePlanting = plantingDateStr ? new Date(plantingDateStr) > new Date() : false;
       const currentDAS = cropInfo?.current_das ?? 0;
-      
-      console.log('📅 Planting check:', {
-        plantingDate: plantingDateStr,
-        isPrePlanting,
-        currentDAS
-      });
 
       if (isPrePlanting || currentDAS < 0) {
-        // ✅ BEFORE PLANTING: Show expected NDVI
         const expectedNDVI = cropInfo?.expected_peak_ndvi || 0.75;
-        console.log('🌱 Field not yet planted - showing expected NDVI:', expectedNDVI);
-        
         setNdviStats({
           current_ndvi: expectedNDVI,
           health_status: 'Pre-Planting',
@@ -182,16 +166,9 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
           is_pre_planting: true
         });
       } else {
-        // ✅ AFTER PLANTING: Show actual NDVI from satellite
         const latestWithNDVI = transformedImagery.find(img => img.ndvi_mean > 0);
         
         if (latestWithNDVI) {
-          console.log('✅ NDVI Stats set from latest image:', {
-            ndvi: latestWithNDVI.ndvi_mean,
-            health: latestWithNDVI.health_status,
-            date: latestWithNDVI.date
-          });
-          
           setNdviStats({
             current_ndvi: latestWithNDVI.ndvi_mean,
             health_status: latestWithNDVI.health_status || getNDVIHealthStatus(latestWithNDVI.ndvi_mean),
@@ -200,10 +177,7 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
             is_pre_planting: false
           });
         } else {
-          // Fallback: Use expected peak NDVI
           const fallbackNDVI = cropInfo?.expected_peak_ndvi || 0;
-          console.warn('⚠️ No valid NDVI data found, using expected peak:', fallbackNDVI);
-          
           setNdviStats({
             current_ndvi: fallbackNDVI,
             health_status: getNDVIHealthStatus(fallbackNDVI),
@@ -220,11 +194,6 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
     } finally {
       setLoading(false);
     }
-  };
-
-  const forceHttpsUrl = (url: string) => {
-    if (!url) return '';
-    return url.replace('http://', 'https://');
   };
 
   const getNDVIHealthStatus = (ndvi: number): string => {
@@ -258,17 +227,9 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
       (loadingIndicator as HTMLElement).style.display = 'none';
     }
 
-    if (backupUrl && backupUrl !== img.src && backupUrl !== '') {
-      console.log(`⚠️ Trying backup image for index ${index}`);
-      img.src = forceHttpsUrl(backupUrl);
-      img.alt = `True Color Map`;
-      
-      const overlay = container.querySelector('.image-overlay');
-      if (overlay) {
-        overlay.textContent = 'True Color';
-        (overlay as HTMLElement).style.background = 'rgba(0,123,255,0.8)';
-      }
-      
+    if (backupUrl && backupUrl !== img.src) {
+      img.src = backupUrl;
+      img.alt = `Backup image`;
       img.onerror = () => showImageError(container, index);
       return;
     }
@@ -280,20 +241,19 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
     const errorPlaceholder = document.createElement('div');
     errorPlaceholder.className = 'flex flex-col items-center justify-center w-full h-full bg-gray-100 text-gray-500';
     errorPlaceholder.innerHTML = `
-      <i class="fas fa-image text-4xl mb-2 opacity-50"></i>
-      <div class="font-semibold">Image Unavailable</div>
+      <i class="fas fa-image text-3xl sm:text-4xl mb-2 opacity-50"></i>
+      <div class="font-semibold text-xs sm:text-sm">Image Unavailable</div>
     `;
     container.innerHTML = '';
     container.appendChild(errorPlaceholder);
   };
 
-  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>, index: number) => {
+  const handleImageLoad = (event: React.SyntheticEvent<HTMLImageElement>) => {
     const img = event.currentTarget;
     const container = img.parentElement;
     
     if (!container) return;
 
-    console.log(`✅ Image ${index + 1} loaded successfully`);
     img.style.opacity = '1';
     
     const loadingIndicator = container.querySelector('.loading-indicator');
@@ -304,21 +264,21 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
 
   if (loading) {
     return (
-      <div className="text-center py-12">
-        <i className="fas fa-spinner fa-spin text-4xl text-blue-600 mb-4"></i>
-        <p className="text-gray-600">Loading satellite imagery...</p>
+      <div className="text-center py-8 sm:py-12">
+        <i className="fas fa-spinner fa-spin text-3xl sm:text-4xl text-blue-600 mb-3 sm:mb-4"></i>
+        <p className="text-sm sm:text-base text-gray-600">Loading satellite imagery...</p>
       </div>
     );
   }
 
   if (error && imageryData.length === 0) {
     return (
-      <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-        <i className="fas fa-satellite-dish text-4xl text-red-500 mb-4 opacity-50"></i>
-        <p className="text-gray-500 font-bold">{error}</p>
+      <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+        <i className="fas fa-satellite-dish text-3xl sm:text-4xl text-red-500 mb-3 sm:mb-4 opacity-50"></i>
+        <p className="text-sm sm:text-base text-gray-500 font-bold px-4">{error}</p>
         <button 
           onClick={loadNDVIData}
-          className="mt-4 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700"
+          className="mt-4 px-4 py-2 bg-emerald-600 text-white text-sm sm:text-base rounded-lg hover:bg-emerald-700"
         >
           Retry
         </button>
@@ -327,20 +287,18 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
   }
 
   return (
-    <div className="space-y-6">
-      {/* NDVI Stats */}
+    <div className="space-y-4 sm:space-y-6">
+      {/* NDVI Stats - Mobile Responsive Grid */}
       {ndviStats && (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-          {/* ✅ NDVI Card - Different styling for pre-planting */}
-          <div className={`p-4 rounded-xl border shadow-sm ${
-            ndviStats.is_pre_planting 
-              ? 'bg-blue-50 border-blue-200' 
-              : 'bg-white border-gray-200'
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6 sm:mb-8">
+          {/* NDVI Card */}
+          <div className={`p-3 sm:p-4 rounded-xl border shadow-sm ${
+            ndviStats.is_pre_planting ? 'bg-blue-50 border-blue-200' : 'bg-white border-gray-200'
           }`}>
-            <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">
+            <h5 className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase mb-1 sm:mb-2">
               {ndviStats.is_pre_planting ? 'Expected NDVI' : 'Current NDVI'}
             </h5>
-            <div className={`text-2xl font-black ${
+            <div className={`text-xl sm:text-2xl font-black ${
               ndviStats.is_pre_planting ? 'text-blue-600' :
               ndviStats.current_ndvi >= 0.5 ? 'text-emerald-600' : 
               ndviStats.current_ndvi >= 0.3 ? 'text-yellow-600' : 'text-red-600'
@@ -348,120 +306,114 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
               {ndviStats.current_ndvi.toFixed(3)}
             </div>
             {ndviStats.is_pre_planting && (
-              <div className="text-xs text-blue-600 mt-1 font-semibold">
+              <div className="text-[10px] sm:text-xs text-blue-600 mt-1 font-semibold">
                 <i className="fas fa-calendar mr-1"></i>
-                Field preparation
+                Field prep
               </div>
             )}
           </div>
           
-          {/* ✅ Health Status Card */}
-          <div className={`p-4 rounded-xl border shadow-sm ${getHealthColor(ndviStats.health_status)}`}>
-            <h5 className="text-xs font-bold uppercase mb-2 opacity-75">Health Status</h5>
-            <div className="text-2xl font-black">{ndviStats.health_status}</div>
-            {ndviStats.is_pre_planting && (
-              <div className="text-xs mt-1 opacity-75">
-                Awaiting planting
-              </div>
-            )}
+          {/* Health Status Card */}
+          <div className={`p-3 sm:p-4 rounded-xl border shadow-sm ${getHealthColor(ndviStats.health_status)}`}>
+            <h5 className="text-[10px] sm:text-xs font-bold uppercase mb-1 sm:mb-2 opacity-75">Health</h5>
+            <div className="text-lg sm:text-2xl font-black">{ndviStats.health_status}</div>
           </div>
           
           {/* Growth Stage Card */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-            <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">Growth Stage</h5>
-            <div className="text-lg font-black text-slate-800 capitalize">
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 shadow-sm">
+            <h5 className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase mb-1 sm:mb-2">Stage</h5>
+            <div className="text-sm sm:text-lg font-black text-slate-800 capitalize leading-tight">
               {ndviStats.growth_stage.replace('_', ' ')}
             </div>
           </div>
           
-          {/* Days After Planting Card */}
-          <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
-            <h5 className="text-xs font-bold text-gray-500 uppercase mb-2">
-              {ndviStats.is_pre_planting ? 'Days to Planting' : 'Days After Planting'}
+          {/* Days Card */}
+          <div className="bg-white p-3 sm:p-4 rounded-xl border border-gray-200 shadow-sm">
+            <h5 className="text-[10px] sm:text-xs font-bold text-gray-500 uppercase mb-1 sm:mb-2">
+              {ndviStats.is_pre_planting ? 'Days to Plant' : 'DAS'}
             </h5>
-            <div className="text-2xl font-black text-slate-800">
+            <div className="text-xl sm:text-2xl font-black text-slate-800">
               {ndviStats.is_pre_planting ? Math.abs(ndviStats.current_das) : ndviStats.current_das}
             </div>
           </div>
         </div>
       )}
 
-      {/* ✅ Pre-Planting Notice */}
+      {/* Pre-Planting Notice */}
       {ndviStats?.is_pre_planting && (
-        <div className="bg-blue-50 border-l-4 border-blue-500 p-4 rounded-lg mb-6">
-          <div className="flex items-start gap-3">
-            <i className="fas fa-info-circle text-blue-600 text-xl mt-0.5"></i>
+        <div className="bg-blue-50 border-l-4 border-blue-500 p-3 sm:p-4 rounded-lg mb-4 sm:mb-6">
+          <div className="flex items-start gap-2 sm:gap-3">
+            <i className="fas fa-info-circle text-blue-600 text-base sm:text-xl mt-0.5"></i>
             <div>
-              <h4 className="font-bold text-blue-900 mb-1">Field Preparation Phase</h4>
-              <p className="text-sm text-blue-700">
-                This field has not been planted yet. The NDVI value shown is the expected peak based on crop type. 
-                Satellite imagery below shows current field conditions before planting.
+              <h4 className="font-bold text-blue-900 text-sm sm:text-base mb-1">Field Preparation Phase</h4>
+              <p className="text-xs sm:text-sm text-blue-700">
+                This field has not been planted yet. Satellite imagery shows current conditions before planting.
               </p>
             </div>
           </div>
         </div>
       )}
 
-      {/* Satellite Images Grid */}
-      <h3 className="text-lg font-black text-slate-900 mb-4 flex items-center gap-2">
-        <i className="fas fa-images text-emerald-600"></i>
-        Recent Satellite Imagery ({imageryData.length})
+      {/* Satellite Images Grid - Mobile Responsive */}
+      <h3 className="text-base sm:text-lg font-black text-slate-900 mb-3 sm:mb-4 flex items-center gap-2">
+        <i className="fas fa-images text-emerald-600 text-sm sm:text-base"></i>
+        <span>Recent Imagery ({imageryData.length})</span>
       </h3>
 
       {imageryData.length === 0 ? (
-        <div className="text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
-          <i className="fas fa-satellite text-4xl text-gray-400 mb-4 opacity-50"></i>
-          <p className="text-gray-500 font-bold">No recent imagery available</p>
+        <div className="text-center py-8 sm:py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+          <i className="fas fa-satellite text-3xl sm:text-4xl text-gray-400 mb-3 sm:mb-4 opacity-50"></i>
+          <p className="text-sm sm:text-base text-gray-500 font-bold">No recent imagery available</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
           {imageryData.slice(0, 6).map((img, index) => {
-            const ndviUrl = forceHttpsUrl(img.images?.ndvi || '');
-            const truecolorUrl = forceHttpsUrl(img.images?.truecolor || '');
+            const ndviUrl = img.images?.ndvi || '';
+            const truecolorUrl = img.images?.truecolor || '';
             const primaryImage = ndviUrl || truecolorUrl;
 
             return (
               <div key={index} className="border border-gray-200 rounded-xl overflow-hidden bg-gray-50 shadow-sm hover:shadow-md transition-shadow">
-                <div className="relative w-full h-64 bg-gray-100 overflow-hidden">
+                <div className="relative w-full h-48 sm:h-64 bg-gray-100 overflow-hidden">
                   {primaryImage ? (
                     <>
                       <img
                         src={primaryImage}
-                        alt={`NDVI Map for ${new Date(img.date).toLocaleDateString()}`}
-                        className="w-full h-full object-cover absolute top-0 left-0 z-10 opacity-0 transition-opacity duration-300"
+                        alt={`NDVI ${img.date}`}
+                        className="w-full h-full object-cover absolute inset-0 z-10 opacity-0 transition-opacity duration-300"
                         onError={(e) => handleImageError(e, truecolorUrl, index)}
-                        onLoad={(e) => handleImageLoad(e, index)}
+                        onLoad={(e) => handleImageLoad(e)}
                         loading="lazy"
                       />
                       
-                      <div className="image-overlay absolute top-2 right-2 bg-emerald-600 text-white px-2 py-1 rounded text-xs font-bold z-20">
+                      <div className="absolute top-2 right-2 bg-emerald-600 text-white px-2 py-1 rounded text-[10px] sm:text-xs font-bold z-20">
                         {ndviUrl ? 'NDVI' : 'True Color'}
                       </div>
 
-                      <div className="loading-indicator absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-30 flex flex-col items-center">
-                        <i className="fas fa-spinner fa-spin text-3xl text-blue-600 mb-2"></i>
-                        <span className="text-xs text-gray-600">Loading...</span>
+                      <div className="loading-indicator absolute inset-0 flex flex-col items-center justify-center z-30">
+                        <i className="fas fa-spinner fa-spin text-2xl sm:text-3xl text-blue-600 mb-2"></i>
+                        <span className="text-[10px] sm:text-xs text-gray-600">Loading...</span>
                       </div>
                     </>
                   ) : (
                     <div className="flex flex-col items-center justify-center w-full h-full">
-                      <i className="fas fa-image text-4xl text-gray-400 mb-2"></i>
-                      <span className="text-sm text-gray-500">No Image</span>
+                      <i className="fas fa-image text-3xl sm:text-4xl text-gray-400 mb-2"></i>
+                      <span className="text-xs sm:text-sm text-gray-500">No Image</span>
                     </div>
                   )}
                 </div>
 
-                <div className="p-4 bg-white">
+                <div className="p-3 sm:p-4 bg-white">
                   <div className="flex justify-between items-start mb-2">
-                    <div className="font-semibold text-gray-800">
-                      {new Date(img.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    <div className="font-semibold text-xs sm:text-sm text-gray-800">
+                      {new Date(img.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
                     </div>
-                    <div className={`px-2 py-1 rounded-lg text-xs font-bold ${getHealthColor(img.health_status || 'Critical')}`}>
+                    <div className={`px-2 py-0.5 sm:py-1 rounded-lg text-[10px] sm:text-xs font-bold ${getHealthColor(img.health_status || 'Critical')}`}>
                       {img.health_status}
                     </div>
                   </div>
                   
-                  <div className="text-sm text-gray-600 space-y-1">
+                  <div className="text-xs sm:text-sm text-gray-600 space-y-1">
                     <div className="flex justify-between">
                       <span>NDVI:</span>
                       <span className={`font-semibold ${
@@ -471,13 +423,9 @@ export default function NDVISatelliteImages({ reportId, userId, polyId, cropInfo
                         {img.ndvi_mean > 0 ? img.ndvi_mean.toFixed(3) : 'N/A'}
                       </span>
                     </div>
-                    <div className="text-xs text-gray-400 flex justify-between">
+                    <div className="text-[10px] sm:text-xs text-gray-400 flex justify-between">
                       <span>Cloud:</span>
                       <span>{img.cloud_coverage}%</span>
-                    </div>
-                    <div className="text-xs text-gray-400 flex justify-between">
-                      <span>Satellite:</span>
-                      <span>{img.satellite}</span>
                     </div>
                   </div>
                 </div>

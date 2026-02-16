@@ -2,7 +2,7 @@
 
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, setDoc, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
@@ -18,12 +18,11 @@ export default function MapPage() {
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState('Initializing map...');
     
-    // NEW: Backend status tracking
+    // Backend status tracking (hidden from user)
     const [backendStatus, setBackendStatus] = useState<'unknown' | 'warming' | 'ready'>('unknown');
 
     // Paywall States
     const [assessmentCount, setAssessmentCount] = useState(0);
-    const [isPremium, setIsPremium] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
 
     // Field Boundary Form States
@@ -36,7 +35,7 @@ export default function MapPage() {
     const [autoRegistrationStatus, setAutoRegistrationStatus] = useState<any>(null);
     const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
 
-    // API Endpoints for your two Render services
+    // API Endpoints
     const SATELLITE_BACKEND = 'https://agricheckb2.onrender.com';
     const RISK_BACKEND = 'https://agricheckb.onrender.com';
 
@@ -49,75 +48,36 @@ export default function MapPage() {
         setTimeout(() => setAlert(null), 5000);
     };
 
-    // IMPROVED: Non-blocking background wake-up
+    // Silent background wake-up with localStorage lock
     useEffect(() => {
         const wakeUpEngines = async () => {
-            if (!db) {
-                console.log('❌ Firestore not initialized, skipping distributed wake-up');
-                return;
-            }
-
             try {
-                const WAKE_UP_COOLDOWN = 15 * 60 * 1000; // 15 minutes
-                const LOCK_DURATION = 2 * 60 * 1000; // 2 minutes lock
-                const QUICK_CHECK_TIMEOUT = 5000; // 5 seconds for quick health check
+                const WAKE_UP_COOLDOWN = 10 * 60 * 1000; // 10 minutes
+                const STORAGE_KEY = 'agricheck_backend_wakeup';
                 
-                // Reference to the wake-up status document
-                const wakeUpRef = doc(db, 'system', 'backend_wakeup_status');
-                
-                // Get current wake-up status
-                const wakeUpDoc = await getDoc(wakeUpRef);
+                const lastWakeUpStr = localStorage.getItem(STORAGE_KEY);
                 const now = Date.now();
                 
-                if (wakeUpDoc.exists()) {
-                    const data = wakeUpDoc.data();
-                    const lastWakeUp = data.lastWakeUpTime?.toMillis() || 0;
-                    const lockExpiry = data.lockExpiry?.toMillis() || 0;
-                    
-                    // Check if we're within cooldown period
+                if (lastWakeUpStr) {
+                    const lastWakeUp = parseInt(lastWakeUpStr);
                     if (now - lastWakeUp < WAKE_UP_COOLDOWN) {
-                        console.log('⏰ Backends were recently warmed up. Checking if they\'re ready...');
-                        
-                        // Do a quick health check
+                        console.log('⏰ Backends were recently warmed up. Checking readiness...');
                         setBackendStatus('warming');
                         const isReady = await quickHealthCheck();
                         if (isReady) {
-                            console.log('✅ Backends are ready!');
                             setBackendStatus('ready');
                         } else {
-                            console.log('⏳ Backends still warming up...');
-                            // Continue monitoring in background
                             monitorBackendReadiness();
                         }
                         return;
                     }
-                    
-                    // Check if another user is currently waking up the backends
-                    if (data.isWakingUp && now < lockExpiry) {
-                        console.log('🔒 Another user is currently waking up the backends.');
-                        setBackendStatus('warming');
-                        // Monitor in background
-                        monitorBackendReadiness();
-                        return;
-                    }
                 }
                 
-                // Acquire the lock and wake up backends
-                console.log('🔐 Acquiring wake-up lock...');
+                localStorage.setItem(STORAGE_KEY, now.toString());
+                console.log('🚀 Waking up backends silently...');
                 setBackendStatus('warming');
                 
-                await setDoc(wakeUpRef, {
-                    isWakingUp: true,
-                    lockExpiry: new Date(now + LOCK_DURATION),
-                    lastWakeUpTime: new Date(now),
-                    wakeUpBy: user?.uid || 'anonymous',
-                    wakeUpEmail: user?.email || 'anonymous'
-                }, { merge: true });
-                
-                console.log('🚀 Waking up AgriCheck Engines in background...');
-                
-                // Ping both backends concurrently with timeout
-                const TIMEOUT = 30000; // 30 seconds timeout
+                const TIMEOUT = 30000;
                 
                 const fetchWithTimeout = (url: string, timeout: number) => {
                     return Promise.race([
@@ -136,57 +96,29 @@ export default function MapPage() {
                 const successCount = results.filter(r => r.status === 'fulfilled').length;
                 console.log(`✅ ${successCount}/2 backends responded`);
                 
-                // Release the lock
-                await setDoc(wakeUpRef, {
-                    isWakingUp: false,
-                    lastWakeUpTime: new Date(),
-                    lastWakeUpSuccess: successCount === 2,
-                    wakeUpBy: user?.uid || 'anonymous'
-                }, { merge: true });
-                
                 if (successCount === 2) {
                     setBackendStatus('ready');
-                    console.log('✅ All backends ready!');
                 } else {
-                    console.warn('⚠️ Some backends did not respond. Monitoring...');
                     monitorBackendReadiness();
                 }
                 
             } catch (error) {
-                console.error('💥 Error during wake-up process:', error);
+                console.warn('⚠️ Backend wake-up encountered an issue (non-critical)');
                 setBackendStatus('warming');
-                
-                // Release the lock on error
-                if (db) {
-                    try {
-                        const wakeUpRef = doc(db, 'system', 'backend_wakeup_status');
-                        await setDoc(wakeUpRef, {
-                            isWakingUp: false,
-                            lastError: error instanceof Error ? error.message : 'Unknown error',
-                            lastErrorTime: new Date()
-                        }, { merge: true });
-                    } catch (releaseError) {
-                        console.error('Failed to release lock:', releaseError);
-                    }
-                }
-                
-                // Continue monitoring
                 monitorBackendReadiness();
             }
         };
         
-        // Start wake-up process in background (non-blocking)
         wakeUpEngines();
-    }, [db, user]);
+    }, []);
 
-    // NEW: Quick health check function
     const quickHealthCheck = async (): Promise<boolean> => {
         try {
-            const QUICK_TIMEOUT = 5000; // 5 seconds
+            const QUICK_TIMEOUT = 5000;
             
             const fetchWithTimeout = (url: string, timeout: number) => {
                 return Promise.race([
-                    fetch(url, { method: 'HEAD' }), // HEAD request is faster
+                    fetch(url, { method: 'HEAD' }),
                     new Promise<Response>((_, reject) => 
                         setTimeout(() => reject(new Error('Timeout')), timeout)
                     )
@@ -198,36 +130,32 @@ export default function MapPage() {
                 fetchWithTimeout(`${RISK_BACKEND}/health`, QUICK_TIMEOUT)
             ]);
             
-            const successCount = results.filter(r => r.status === 'fulfilled').length;
-            return successCount === 2;
+            return results.filter(r => r.status === 'fulfilled').length === 2;
         } catch {
             return false;
         }
     };
 
-    // NEW: Monitor backend readiness in background
     const monitorBackendReadiness = () => {
         let attempts = 0;
-        const maxAttempts = 6; // 6 attempts = 60 seconds max
+        const maxAttempts = 6;
         
         const checkInterval = setInterval(async () => {
             attempts++;
-            console.log(`🔍 Checking backend readiness... (Attempt ${attempts}/${maxAttempts})`);
-            
             const isReady = await quickHealthCheck();
             
             if (isReady) {
-                console.log('✅ Backends are now ready!');
+                console.log('✅ Backends ready');
                 setBackendStatus('ready');
                 clearInterval(checkInterval);
             } else if (attempts >= maxAttempts) {
-                console.log('⏱️ Backend readiness check timed out. They may still be warming up.');
+                console.log('⏱️ Backend check timeout');
                 clearInterval(checkInterval);
             }
-        }, 10000); // Check every 10 seconds
+        }, 10000);
     };
 
-    // Initialize Map (NOW NON-BLOCKING!)
+    // Initialize Map
     useEffect(() => {
         let map: any;
 
@@ -239,7 +167,7 @@ export default function MapPage() {
                 // @ts-ignore
                 await import('leaflet-draw');
 
-                // @ts-ignore - _getIconUrl is a private property
+                // @ts-ignore
                 delete L.Icon.Default.prototype._getIconUrl;
                 L.Icon.Default.mergeOptions({
                     iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
@@ -253,7 +181,6 @@ export default function MapPage() {
                             setupMap(L, position.coords.latitude, position.coords.longitude);
                         },
                         (error) => {
-                            console.error("Geolocation error:", error);
                             setupMap(L, 5.6037, -0.1870);
                         }
                     );
@@ -347,7 +274,6 @@ export default function MapPage() {
                 setAutoRegistrationStatus(null);
             });
 
-            // Map is ready - remove loading spinner
             setIsLoading(false);
         };
 
@@ -361,22 +287,12 @@ export default function MapPage() {
         };
     }, []);
 
-    // Load user's assessment count and premium status
+    // Load user's assessment count (NO premium check anymore)
     useEffect(() => {
         const loadUserData = async () => {
-            if (!user) return;
-            
-            if (!db) {
-                console.error('Firestore not initialized');
-                return;
-            }
+            if (!user || !db) return;
             
             try {
-                const userDoc = await getDoc(doc(db, 'users', user.uid));
-                if (userDoc.exists()) {
-                    setIsPremium(userDoc.data().isPremium || false);
-                }
-
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
                 const querySnapshot = await getDocs(q);
@@ -452,7 +368,6 @@ export default function MapPage() {
 
                 showAlert('GeoJSON loaded successfully', 'success');
             } catch (err) {
-                console.error(err);
                 showAlert('Invalid GeoJSON file', 'error');
             }
         };
@@ -473,14 +388,15 @@ export default function MapPage() {
             return;
         }
 
-        if (assessmentCount >= 2 && !isPremium) {
+        // NEW: EVERYONE pays after 2 free assessments (premium or not)
+        if (assessmentCount >= 2) {
             setShowPaymentModal(true);
             return;
         }
 
-        // Check backend status before submitting
+        // Check backend status
         if (backendStatus === 'warming') {
-            showAlert("AgriCheck engines are still warming up. Please wait 10-30 seconds and try again.", "warning");
+            showAlert("Processing engines are starting up. Please wait 10-20 seconds and try again.", "warning");
             return;
         }
 
@@ -504,7 +420,6 @@ export default function MapPage() {
                 longitude: fieldData.center.lng
             };
 
-            // Add retry logic for backend calls
             const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
                 for (let i = 0; i <= retries; i++) {
                     try {
@@ -567,7 +482,7 @@ export default function MapPage() {
 
         } catch (error: any) {
             console.error("Analysis Error:", error);
-            showAlert("Connection error. The backends may still be starting up. Please try again in 30 seconds.", "error");
+            showAlert("Connection error. Engines may still be starting. Please wait 30 seconds and try again.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -590,17 +505,6 @@ export default function MapPage() {
                                 'bg-blue-50 border-blue-500 text-blue-800'}`}>
                     <Info size={20} />
                     <span className="font-bold">{alert.message}</span>
-                </div>
-            )}
-
-            {/* NEW: Backend Status Indicator */}
-            {backendStatus === 'warming' && (
-                <div className="fixed bottom-4 right-4 z-[9999] px-4 py-3 rounded-xl shadow-lg bg-blue-50 border-l-4 border-blue-500 flex items-center gap-3 animate-pulse">
-                    <Loader2 size={18} className="animate-spin text-blue-600" />
-                    <div>
-                        <p className="text-blue-800 font-bold text-sm">AgriCheck Engines Warming Up...</p>
-                        <p className="text-blue-600 text-xs">You can draw your field now. Submit in 10-30 seconds.</p>
-                    </div>
                 </div>
             )}
 
@@ -643,11 +547,11 @@ export default function MapPage() {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 animate-fade-in">
                         <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-100 text-center">
                             <p className="text-xs uppercase tracking-wider font-bold text-emerald-600 mb-1">Area (Hectares)</p>
-                            <p className="text-2xl font-bold text-emerald-900">{fieldData.hectares.toFixed(2)}</p>
+                            <p className="text-2xl font-black text-emerald-900">{fieldData.hectares.toFixed(2)}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
                             <p className="text-xs uppercase tracking-wider font-bold text-slate-600 mb-1">Area (Sq Meters)</p>
-                            <p className="text-xl font-bold text-slate-800">{fieldData.sqMeters.toFixed(0)}</p>
+                            <p className="text-xl font-black text-slate-800">{fieldData.sqMeters.toFixed(0)}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center col-span-2 md:col-span-2">
                             <p className="text-xs uppercase tracking-wider font-bold text-slate-600 mb-1">Center Point (Risk Analysis Target)</p>
@@ -726,9 +630,9 @@ export default function MapPage() {
                             <div className="w-20 h-20 bg-amber-100 rounded-full flex items-center justify-center mx-auto mb-6">
                                 <Lock size={40} className="text-amber-600" />
                             </div>
-                            <h2 className="text-2xl font-bold text-slate-800 mb-4">Assessment Limit Reached</h2>
+                            <h2 className="text-2xl font-bold text-slate-800 mb-4">Payment Required</h2>
                             <p className="text-slate-600 mb-8 leading-relaxed">
-                                You have used your <strong>2 free assessments</strong>. Upgrade to Premium to map more fields and access unlimited satellite monitoring.
+                                You have used your <strong>2 free assessments</strong>. Each additional field analysis requires a one-time payment.
                             </p>
 
                             <div className="space-y-3">
@@ -743,10 +647,10 @@ export default function MapPage() {
                                                     uid: user.uid
                                                 },
                                                 'GHS',
-                                                'PREMIUM',
+                                                'ASSESSMENT',
                                                 {
-                                                    title: "Agricheck Premium",
-                                                    description: "Unlimited Field Assessments & Risk Analysis"
+                                                    title: "Field Assessment",
+                                                    description: "Comprehensive Field Analysis & Satellite Monitoring"
                                                 },
                                                 async (ref) => {
                                                     try {
@@ -755,18 +659,23 @@ export default function MapPage() {
                                                             return;
                                                         }
                                                         
+                                                        // Record the payment but don't change premium status
                                                         const userRef = doc(db, 'users', user.uid);
                                                         await updateDoc(userRef, {
-                                                            isPremium: true,
                                                             lastPaymentRef: ref,
-                                                            paidAt: serverTimestamp()
+                                                            lastPaymentDate: serverTimestamp()
                                                         });
-                                                        setIsPremium(true);
+                                                        
                                                         setShowPaymentModal(false);
-                                                        showAlert("Payment Successful! Welcome to Premium.", "success");
+                                                        showAlert("Payment Successful! Proceeding with analysis...", "success");
+                                                        
+                                                        // Proceed with the field submission
+                                                        // We need to trigger the analysis now
+                                                        handleFieldSubmitAfterPayment();
+                                                        
                                                     } catch (err) {
-                                                        console.error("Error updating premium status:", err);
-                                                        showAlert("Payment OK, but failed to update status. Please contact support.", "error");
+                                                        console.error("Error recording payment:", err);
+                                                        showAlert("Payment OK, but failed to record. Please contact support.", "error");
                                                     }
                                                 }
                                             );
@@ -774,19 +683,19 @@ export default function MapPage() {
                                     }}
                                 >
                                     <CreditCard size={20} className="group-hover:scale-110 transition-transform" />
-                                    Upgrade to Premium
+                                    Pay for This Assessment
                                 </button>
                                 <button
                                     className="w-full bg-slate-100 text-slate-600 font-bold py-4 rounded-xl hover:bg-slate-200 transition-all"
                                     onClick={() => setShowPaymentModal(false)}
                                 >
-                                    Maybe Later
+                                    Cancel
                                 </button>
                             </div>
                         </div>
                         <div className="bg-slate-50 p-4 border-t border-slate-100">
                             <p className="text-xs text-slate-400">
-                                Your first 2 assessments remain free and accessible forever in your dashboard.
+                                Your first 2 assessments are free. Additional analyses are pay-per-use.
                             </p>
                         </div>
                     </div>
@@ -794,4 +703,95 @@ export default function MapPage() {
             )}
         </div>
     );
+
+    // NEW: Function to submit field after payment
+    async function handleFieldSubmitAfterPayment() {
+        if (!user?.uid || !fieldData || !db) return;
+
+        setIsLoading(true);
+        setLoadingMessage('Analyzing your field...');
+
+        try {
+            const riskPayload = {
+                latitude: fieldData.center.lat,
+                longitude: fieldData.center.lng,
+                crop_type: boundaryCropType.toLowerCase(),
+                elevation: 1200
+            };
+
+            const boundaryPayload = {
+                crop_type: boundaryCropType.toLowerCase(),
+                field_location: boundaryDescription,
+                field_coordinates: fieldData.coordinates,
+                planting_date: datePlanted,
+                latitude: fieldData.center.lat,
+                longitude: fieldData.center.lng
+            };
+
+            const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
+                for (let i = 0; i <= retries; i++) {
+                    try {
+                        const response = await fetch(url, options);
+                        if (response.ok) return response;
+                        if (i === retries) throw new Error(`Request failed after ${retries} retries`);
+                    } catch (error) {
+                        if (i === retries) throw error;
+                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
+                    }
+                }
+                throw new Error('Retry loop exhausted');
+            };
+
+            const [riskRes, satelliteRes] = await Promise.all([
+                fetchWithRetry(POINT_ASSESSMENT_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(riskPayload)
+                }),
+                fetchWithRetry(FIELD_BOUNDARY_API_URL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-User-ID': user.uid
+                    },
+                    body: JSON.stringify(boundaryPayload)
+                })
+            ]);
+
+            const riskData = await riskRes.json();
+            const satelliteData = await satelliteRes.json();
+
+            await addDoc(collection(db, 'assessments'), {
+                userId: user.uid,
+                userEmail: user.email,
+                type: 'comprehensive_analysis',
+                cropType: boundaryCropType,
+                fieldLocation: boundaryDescription,
+                latitude: fieldData.center.lat,
+                longitude: fieldData.center.lng,
+                fieldCoordinates: JSON.stringify(fieldData.coordinates),
+                datePlanted,
+                results: {
+                    satellite: satelliteData,
+                    risk_ml: riskData
+                },
+                area_hectares: fieldData.hectares,
+                satellite_monitoring_enabled: true,
+                createdAt: serverTimestamp()
+            });
+
+            setAssessmentCount(prev => prev + 1);
+            showAlert("Analysis Complete! Redirecting...", 'success');
+            
+            setTimeout(() => {
+                router.push('/dashboard/satellite');
+            }, 2000);
+
+        } catch (error: any) {
+            console.error("Analysis Error:", error);
+            showAlert("Connection error. Please try again.", "error");
+        } finally {
+            setIsLoading(false);
+        }
+    }
 }

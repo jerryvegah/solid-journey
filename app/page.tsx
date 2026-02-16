@@ -315,7 +315,7 @@ export default function LandingPage() {
           <div className="flex flex-col md:flex-row items-center gap-8">
             <div className="text-center md:text-left">
               <h4 className="text-emerald-400 font-bold mb-2 tracking-widest uppercase text-xs">Support</h4>
-              <a href="https://wa.me/message/..." className="text-slate-400 hover:text-white transition-all flex items-center justify-center md:justify-start gap-2">
+              <a href="https://wa.me/233535254739" className="text-slate-400 hover:text-white transition-all flex items-center justify-center md:justify-start gap-2">
                 <i className="fa-brands fa-whatsapp"></i> WhatsApp Us
               </a>
             </div>

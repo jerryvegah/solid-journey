@@ -15,7 +15,7 @@ const translations: Record<string, TranslationKeys> = {
     nav_packages: "Input Packages",
     nav_signin: "Sign In",
     hero_title: "Grow crops Smarter, Not Harder",
-    hero_subtitle: "Remotely map your farm, get instant climate assessments, and access tailored input packages with flexible financing options.",
+    hero_subtitle: "Remotely map and monitor your farm, get instant climate assessments, and access tailored input packages with flexible financing options.",
     hero_cta_primary: "Get Started",
     hero_cta_secondary: "How It Works",
     audience_title: "Who We Serve",
@@ -26,18 +26,14 @@ const translations: Record<string, TranslationKeys> = {
     audience_investors_desc: "De-risk your investments and drive measurable impact",
     audience_investors_desc2: "with data-driven strategies and transparent climate reporting",
     how_title: "How Agricheck Works",
-    step1_title: "Sign up & verify",
-    step1_desc: "Register with your name, phone, and email to create your digital farmer presence.",
-    step2_title: "Remotely map your farm",
-    step2_desc: "Use your phone to draw your farm boundary. Our system analyzes your Farmland.",
-    step3_title: "Assessment & Recommendation",
-    step3_desc: "We use climate data, AI and satellite data to recommend the best input package for your crop and location.",
-    step4_title: "Get Financing Offer",
-    step4_desc: "Your farm's risk score determines your financing: Buy Now Pay Later with produce, Partial Deposit, or Cash.",
-    step5_title: "Sign Contract & Receive Inputs",
-    step5_desc: "Sign digitally, and we deliver your seeds, fertilizers, and chemicals to your location.",
-    step6_title: "Monitor & Sell",
-    step6_desc: "Monitor your farm throughout the season and sell your harvest directly to Agricheck if you choose.",
+    step1_title: "Remotely map your farm",
+    step1_desc: "Use your phone or laptop to draw your farm boundary. Our system analyzes your Farmland.",
+    step2_title: "Assessment & Recommendation",
+    step2_desc: "We use climate data, AI and satellite data to recommend the best input package for your crop and location.",
+    step3_title: "Get Financing Offer",
+    step3_desc: "Your farm's risk score determines your financing: Buy Now Pay Later with produce, Partial Deposit, or Cash.",
+    step4_title: "Deliver, Monitor & Sell",
+    step4_desc: "We deliver inputs to your location, help you monitor growth, and buy your harvest at a guaranteed price.",
     packages_title: "Input Packages",
     package1_title: "Maize Starter Pack",
     package1_desc: "Includes hybrid maize seeds, NPK fertilizer, and pre-emergence herbicide.",
@@ -80,18 +76,14 @@ const translations: Record<string, TranslationKeys> = {
     audience_investors_desc: "Réduisez les risques et générez de l'impact",
     audience_investors_desc2: "avec des rapports climatiques transparents",
     how_title: "Comment fonctionne Agricheck",
-    step1_title: "S'inscrire",
-    step1_desc: "Inscrivez-vous avec votre nom et téléphone.",
-    step2_title: "Cartographier",
-    step2_desc: "Utilisez votre téléphone pour dessiner votre ferme.",
-    step3_title: "Évaluation",
-    step3_desc: "Nous recommandons le meilleur forfait d'intrants.",
-    step4_title: "Offre de financement",
-    step4_desc: "Le score de risque détermine votre financement.",
-    step5_title: "Recevoir les intrants",
-    step5_desc: "Livraison de semences et d'engrais.",
-    step6_title: "Surveiller & Vendre",
-    step6_desc: "Surveillez votre ferme et vendez votre récolte.",
+    step1_title: "Cartographier votre ferme",
+    step1_desc: "Utilisez votre téléphone ou ordinateur pour dessiner les limites de votre ferme. Notre système analyse vos terres.",
+    step2_title: "Évaluation et recommandation",
+    step2_desc: "Nous utilisons des données climatiques, l'IA et des données satellites pour recommander le meilleur forfait d'intrants.",
+    step3_title: "Offre de financement",
+    step3_desc: "Le score de risque de votre ferme détermine votre financement : Achetez maintenant, payez plus tard avec les produits, dépôt partiel ou espèces.",
+    step4_title: "Livraison, surveillance et vente",
+    step4_desc: "Nous livrons vos intrants, vous aidons à surveiller votre ferme et rachetons votre récolte au meilleur prix.",
     packages_title: "Forfaits d'intrants",
     package1_title: "Pack Maïs",
     package1_desc: "Semences hybrides et engrais NPK.",
@@ -228,8 +220,8 @@ export default function LandingPage() {
       <section id="how" className="py-24 bg-slate-50">
         <div className="container mx-auto px-6">
           <h2 className="text-4xl font-bold text-center text-emerald-900 mb-16">{t.how_title}</h2>
-          <div className="grid md:grid-cols-3 gap-8">
-            {[1, 2, 3, 4, 5, 6].map((num) => (
+          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            {[1, 2, 3, 4].map((num) => (
               <div key={num} className="bg-white p-8 rounded-3xl shadow-sm hover:shadow-xl transition-all border border-slate-100">
                 <div className="w-12 h-12 bg-emerald-700 text-white rounded-2xl flex items-center justify-center text-xl font-bold mb-6 rotate-6 group-hover:rotate-0 transition-all">
                   {num}
@@ -284,23 +276,23 @@ export default function LandingPage() {
         </div>
       </section>
 
-     {/* VIDEO SECTION */}
-<section className="py-24 bg-white">
-  <div className="container mx-auto px-6 text-center">
-    <h2 className="text-4xl font-bold text-emerald-900 mb-6">{t.video_title}</h2>
-    <p className="text-slate-600 mb-12 max-w-2xl mx-auto">{t.video_desc}</p>
-    <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
-      <iframe
-        className="absolute inset-0 w-full h-full"
-        src="https://www.youtube.com/embed/oJFKbU-Xbe8"
-        title="Agricheck Platform Demo"
-        frameBorder="0"
-        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-        allowFullScreen
-      ></iframe>
-    </div>
-  </div>
-</section>
+      {/* VIDEO SECTION */}
+      <section className="py-24 bg-white">
+        <div className="container mx-auto px-6 text-center">
+          <h2 className="text-4xl font-bold text-emerald-900 mb-6">{t.video_title}</h2>
+          <p className="text-slate-600 mb-12 max-w-2xl mx-auto">{t.video_desc}</p>
+          <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
+            <iframe
+              className="absolute inset-0 w-full h-full"
+              src="https://www.youtube.com/embed/oJFKbU-Xbe8"
+              title="Agricheck Platform Demo"
+              frameBorder="0"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+              allowFullScreen
+            ></iframe>
+          </div>
+        </div>
+      </section>
 
       {/* FOOTER */}
       <footer className="bg-slate-900 text-white py-12">

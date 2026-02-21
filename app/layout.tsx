@@ -12,6 +12,9 @@ const poppins = Poppins({
 export const metadata: Metadata = {
   title: "Agricheck – Climate Smart Farming Starts Here",
   description: "Remotely map your farm and access tailored input packages.",
+  icons: {
+    icon: "/favicon.png",
+  },
 };
 
 export default function RootLayout({

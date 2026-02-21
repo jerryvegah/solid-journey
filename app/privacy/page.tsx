@@ -9,7 +9,7 @@ export default function PrivacyPolicyPage() {
             <div className="max-w-3xl mx-auto bg-white rounded-2xl shadow-sm border border-slate-100 p-8 md:p-12">
                 <Link href="/dashboard/settings" className="inline-flex items-center gap-2 text-emerald-600 font-bold mb-8 hover:text-emerald-700 transition-colors">
                     <ArrowLeft size={20} />
-                    Back to Settings
+                    Back
                 </Link>
 
                 <h1 className="text-3xl font-bold text-slate-800 mb-2">Privacy Policy</h1>

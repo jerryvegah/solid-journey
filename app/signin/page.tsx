@@ -46,7 +46,14 @@ export default function SignInPage() {
 
     return (
         <div className="min-h-screen bg-emerald-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
-            <div className="sm:mx-auto sm:w-full sm:max-w-md">
+            <div className="sm:mx-auto sm:w-full sm:max-w-md relative">
+                <Link
+                    href="/"
+                    className="absolute -top-8 left-0 flex items-center text-sm font-medium text-emerald-600 hover:text-emerald-500 transition-colors"
+                >
+                    <i className="fa-solid fa-arrow-left mr-2"></i>
+                    Back to Home
+                </Link>
                 <Link href="/" className="flex justify-center mb-6">
                     <div className="relative w-40 h-16">
                         <Image src="/Agriguard logo new s.png" alt="Agricheck" fill className="object-contain" />

@@ -17,14 +17,12 @@ export default function MapPage() {
     const drawnItemsRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState('Initializing map...');
-    
-    // Backend status tracking (hidden from user)
-    const [backendStatus, setBackendStatus] = useState<'unknown' | 'warming' | 'ready'>('unknown');
+    const [mapError, setMapError] = useState<string | null>(null);
 
     // Paywall States
     const [assessmentCount, setAssessmentCount] = useState(0);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [paymentApproved, setPaymentApproved] = useState(false); // NEW: Track if payment was made
+    const [paymentApproved, setPaymentApproved] = useState(false);
 
     // Field Boundary Form States
     const [boundaryCropType, setBoundaryCropType] = useState('maize');
@@ -49,125 +47,68 @@ export default function MapPage() {
         setTimeout(() => setAlert(null), 5000);
     };
 
-    // Silent background wake-up with localStorage lock
-    useEffect(() => {
-        const wakeUpEngines = async () => {
-            try {
-                const WAKE_UP_COOLDOWN = 10 * 60 * 1000;
-                const STORAGE_KEY = 'agricheck_backend_wakeup';
-                
-                const lastWakeUpStr = localStorage.getItem(STORAGE_KEY);
-                const now = Date.now();
-                
-                if (lastWakeUpStr) {
-                    const lastWakeUp = parseInt(lastWakeUpStr);
-                    if (now - lastWakeUp < WAKE_UP_COOLDOWN) {
-                        console.log('⏰ Backends recently warmed up');
-                        setBackendStatus('warming');
-                        const isReady = await quickHealthCheck();
-                        if (isReady) {
-                            setBackendStatus('ready');
-                        } else {
-                            monitorBackendReadiness();
-                        }
-                        return;
-                    }
-                }
-                
-                localStorage.setItem(STORAGE_KEY, now.toString());
-                console.log('🚀 Waking up backends...');
-                setBackendStatus('warming');
-                
-                const TIMEOUT = 30000;
-                
-                const fetchWithTimeout = (url: string, timeout: number) => {
-                    return Promise.race([
-                        fetch(url),
-                        new Promise<Response>((_, reject) => 
-                            setTimeout(() => reject(new Error('Timeout')), timeout)
-                        )
-                    ]);
-                };
-                
-                const results = await Promise.allSettled([
-                    fetchWithTimeout(`${SATELLITE_BACKEND}/health`, TIMEOUT),
-                    fetchWithTimeout(`${RISK_BACKEND}/health`, TIMEOUT)
-                ]);
-                
-                const successCount = results.filter(r => r.status === 'fulfilled').length;
-                console.log(`✅ ${successCount}/2 backends responded`);
-                
-                if (successCount === 2) {
-                    setBackendStatus('ready');
-                } else {
-                    monitorBackendReadiness();
-                }
-                
-            } catch (error) {
-                console.warn('⚠️ Backend wake-up issue (non-critical)');
-                setBackendStatus('warming');
-                monitorBackendReadiness();
-            }
-        };
-        
-        wakeUpEngines();
-    }, []);
-
-    const quickHealthCheck = async (): Promise<boolean> => {
-        try {
-            const QUICK_TIMEOUT = 5000;
-            
-            const fetchWithTimeout = (url: string, timeout: number) => {
-                return Promise.race([
-                    fetch(url, { method: 'HEAD' }),
-                    new Promise<Response>((_, reject) => 
-                        setTimeout(() => reject(new Error('Timeout')), timeout)
-                    )
-                ]);
-            };
-            
-            const results = await Promise.allSettled([
-                fetchWithTimeout(`${SATELLITE_BACKEND}/health`, QUICK_TIMEOUT),
-                fetchWithTimeout(`${RISK_BACKEND}/health`, QUICK_TIMEOUT)
-            ]);
-            
-            return results.filter(r => r.status === 'fulfilled').length === 2;
-        } catch {
-            return false;
-        }
-    };
-
-    const monitorBackendReadiness = () => {
-        let attempts = 0;
-        const maxAttempts = 6;
-        
-        const checkInterval = setInterval(async () => {
-            attempts++;
-            const isReady = await quickHealthCheck();
-            
-            if (isReady) {
-                console.log('✅ Backends ready');
-                setBackendStatus('ready');
-                clearInterval(checkInterval);
-            } else if (attempts >= maxAttempts) {
-                console.log('⏱️ Backend check timeout');
-                clearInterval(checkInterval);
-            }
-        }, 10000);
-    };
-
-    // Initialize Map
+    // Initialize Map - Optimized for slow connections
     useEffect(() => {
         let map: any;
+        let mounted = true;
 
         const initMap = async () => {
             if (typeof window === 'undefined') return;
 
             try {
-                const L = (await import('leaflet')).default;
-                // @ts-ignore
-                await import('leaflet-draw');
+                // Get user location with timeout
+                const getUserLocation = (): Promise<{ lat: number; lng: number }> => {
+                    return new Promise((resolve) => {
+                        // Default to Ghana if geolocation fails or takes too long
+                        const defaultLocation = { lat: 5.6037, lng: -0.1870 };
+                        
+                        if (!navigator.geolocation) {
+                            resolve(defaultLocation);
+                            return;
+                        }
 
+                        // Set 3 second timeout for geolocation
+                        const timeoutId = setTimeout(() => {
+                            console.log('Geolocation timeout, using default location');
+                            resolve(defaultLocation);
+                        }, 3000);
+
+                        navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                                clearTimeout(timeoutId);
+                                resolve({
+                                    lat: position.coords.latitude,
+                                    lng: position.coords.longitude
+                                });
+                            },
+                            (error) => {
+                                clearTimeout(timeoutId);
+                                console.warn('Geolocation error:', error);
+                                resolve(defaultLocation);
+                            },
+                            { timeout: 2000, enableHighAccuracy: false }
+                        );
+                    });
+                };
+
+                const location = await getUserLocation();
+                if (!mounted) return;
+
+                // Load Leaflet libraries
+                setLoadingMessage('Loading map components...');
+                const L = (await import('leaflet')).default;
+                
+                // Load leaflet-draw with error handling
+                try {
+                    // @ts-ignore
+                    await import('leaflet-draw');
+                } catch (err) {
+                    console.warn('Leaflet-draw loading warning:', err);
+                }
+
+                if (!mounted) return;
+
+                // Fix Leaflet icon paths
                 // @ts-ignore
                 delete L.Icon.Default.prototype._getIconUrl;
                 L.Icon.Default.mergeOptions({
@@ -176,21 +117,12 @@ export default function MapPage() {
                     shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
                 });
 
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            setupMap(L, position.coords.latitude, position.coords.longitude);
-                        },
-                        (error) => {
-                            setupMap(L, 5.6037, -0.1870);
-                        }
-                    );
-                } else {
-                    setupMap(L, 5.6037, -0.1870);
-                }
+                setLoadingMessage('Setting up map...');
+                setupMap(L, location.lat, location.lng);
 
             } catch (error) {
                 console.error("Error initializing map:", error);
+                setMapError("Failed to load map. Please refresh the page.");
                 setIsLoading(false);
             }
         };
@@ -199,91 +131,132 @@ export default function MapPage() {
             if (!mapContainerRef.current) return;
             if (mapInstanceRef.current) return;
 
-            const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN || '';
+            try {
+                // Create base map layers
+                const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                    maxZoom: 19,
+                    attribution: '&copy; OpenStreetMap contributors',
+                    errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
+                });
 
-            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                maxZoom: 19,
-                attribution: '&copy; OpenStreetMap contributors'
-            });
-
-            const satelliteLayer = L.tileLayer(
-                `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mbToken}`, {
-                tileSize: 512,
-                zoomOffset: -1,
-                maxZoom: 18,
-                attribution: '© Mapbox © OpenStreetMap'
-            });
-
-            map = L.map(mapContainerRef.current).setView([lat, lng], 16);
-            mapInstanceRef.current = map;
-            satelliteLayer.addTo(map);
-
-            const baseLayers = {
-                'Satellite': satelliteLayer,
-                'Streets': osmLayer
-            };
-            L.control.layers(baseLayers).addTo(map);
-
-            const drawnItems = new L.FeatureGroup();
-            map.addLayer(drawnItems);
-            drawnItemsRef.current = drawnItems;
-
-            const drawControl = new L.Control.Draw({
-                draw: {
-                    polygon: {
-                        allowIntersection: false,
-                        showArea: true,
-                        drawError: {
-                            color: '#e1e100',
-                            message: '<strong>Error:</strong> shape edges cannot cross!'
-                        },
-                        shapeOptions: {
-                            color: '#10b981',
-                            weight: 3,
-                            opacity: 0.8,
-                            fillOpacity: 0.2
+                // Satellite layer (optional - will fallback to OSM if Mapbox fails)
+                const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
+                let satelliteLayer;
+                
+                if (mbToken) {
+                    satelliteLayer = L.tileLayer(
+                        `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mbToken}`, 
+                        {
+                            tileSize: 512,
+                            zoomOffset: -1,
+                            maxZoom: 18,
+                            attribution: '© Mapbox © OpenStreetMap',
+                            errorTileUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
                         }
-                    },
-                    polyline: false,
-                    rectangle: false,
-                    circle: false,
-                    marker: false,
-                    circlemarker: false
-                },
-                edit: {
-                    featureGroup: drawnItems,
-                    remove: true
+                    );
                 }
-            });
-            map.addControl(drawControl);
 
-            map.on(L.Draw.Event.CREATED, (e: any) => {
-                const layer = e.layer;
-                drawnItems.clearLayers();
-                drawnItems.addLayer(layer);
-                updateFieldAnalysis(L, layer);
-            });
+                // Initialize map
+                map = L.map(mapContainerRef.current, {
+                    center: [lat, lng],
+                    zoom: 16,
+                    zoomControl: true,
+                    preferCanvas: true // Better performance
+                });
+                
+                mapInstanceRef.current = map;
 
-            map.on(L.Draw.Event.EDITED, (e: any) => {
-                e.layers.eachLayer((layer: any) => {
+                // Add default layer (satellite if available, otherwise OSM)
+                if (satelliteLayer) {
+                    satelliteLayer.addTo(map);
+                } else {
+                    osmLayer.addTo(map);
+                }
+
+                // Add layer control if satellite is available
+                if (satelliteLayer) {
+                    const baseLayers = {
+                        'Satellite': satelliteLayer,
+                        'Streets': osmLayer
+                    };
+                    L.control.layers(baseLayers).addTo(map);
+                }
+
+                // Setup drawing functionality
+                const drawnItems = new L.FeatureGroup();
+                map.addLayer(drawnItems);
+                drawnItemsRef.current = drawnItems;
+
+                const drawControl = new L.Control.Draw({
+                    draw: {
+                        polygon: {
+                            allowIntersection: false,
+                            showArea: true,
+                            drawError: {
+                                color: '#e1e100',
+                                message: '<strong>Error:</strong> shape edges cannot cross!'
+                            },
+                            shapeOptions: {
+                                color: '#10b981',
+                                weight: 3,
+                                opacity: 0.8,
+                                fillOpacity: 0.2
+                            }
+                        },
+                        polyline: false,
+                        rectangle: false,
+                        circle: false,
+                        marker: false,
+                        circlemarker: false
+                    },
+                    edit: {
+                        featureGroup: drawnItems,
+                        remove: true
+                    }
+                });
+                map.addControl(drawControl);
+
+                // Event handlers
+                map.on(L.Draw.Event.CREATED, (e: any) => {
+                    const layer = e.layer;
+                    drawnItems.clearLayers();
+                    drawnItems.addLayer(layer);
                     updateFieldAnalysis(L, layer);
                 });
-            });
 
-            map.on(L.Draw.Event.DELETED, () => {
-                setFieldData(null);
-                setAutoRegistrationStatus(null);
-            });
+                map.on(L.Draw.Event.EDITED, (e: any) => {
+                    e.layers.eachLayer((layer: any) => {
+                        updateFieldAnalysis(L, layer);
+                    });
+                });
 
-            setIsLoading(false);
+                map.on(L.Draw.Event.DELETED, () => {
+                    setFieldData(null);
+                    setAutoRegistrationStatus(null);
+                });
+
+                // Map is ready
+                setIsLoading(false);
+                console.log('✅ Map initialized successfully');
+
+            } catch (error) {
+                console.error('Map setup error:', error);
+                setMapError("Failed to setup map. Please refresh the page.");
+                setIsLoading(false);
+            }
         };
 
         initMap();
 
         return () => {
+            mounted = false;
             if (mapInstanceRef.current) {
-                mapInstanceRef.current.remove();
-                mapInstanceRef.current = null;
+                try {
+                    mapInstanceRef.current.remove();
+                    mapInstanceRef.current = null;
+                } catch (err) {
+                    console.warn('Map cleanup warning:', err);
+                }
             }
         };
     }, []);
@@ -326,12 +299,14 @@ export default function MapPage() {
         const latlngs = layer.getLatLngs()[0];
         const areaSqMeters = geodesicArea(latlngs);
         const areaHectares = areaSqMeters / 10000;
+        const areaAcres = areaSqMeters / 4046.86;
 
         const bounds = layer.getBounds();
         const center = bounds.getCenter();
 
         setFieldData({
             hectares: areaHectares,
+            acres: areaAcres,
             sqMeters: areaSqMeters,
             center: center,
             coordinates: layer.toGeoJSON().geometry.coordinates
@@ -389,23 +364,15 @@ export default function MapPage() {
             return;
         }
 
-        // CHECK: If user has 2+ assessments AND hasn't paid for this one yet
-        if (assessmentCount >= 2 && !paymentApproved) {
+        // Only first assessment is free
+        if (assessmentCount >= 1 && !paymentApproved) {
             setShowPaymentModal(true);
             return;
         }
 
-        // Check backend status
-        if (backendStatus === 'warming') {
-            showAlert("Processing engines are starting up. Please wait 10-20 seconds and try again.", "warning");
-            return;
-        }
-
-        // Run the analysis
         await runFieldAnalysis();
     };
 
-    // SIMPLIFIED: Just run the analysis (no payment logic here)
     const runFieldAnalysis = async () => {
         if (!user?.uid || !fieldData || !db) return;
 
@@ -429,27 +396,13 @@ export default function MapPage() {
                 longitude: fieldData.center.lng
             };
 
-            const fetchWithRetry = async (url: string, options: RequestInit, retries = 2): Promise<Response> => {
-                for (let i = 0; i <= retries; i++) {
-                    try {
-                        const response = await fetch(url, options);
-                        if (response.ok) return response;
-                        if (i === retries) throw new Error(`Request failed after ${retries} retries`);
-                    } catch (error) {
-                        if (i === retries) throw error;
-                        await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-                    }
-                }
-                throw new Error('Retry loop exhausted');
-            };
-
             const [riskRes, satelliteRes] = await Promise.all([
-                fetchWithRetry(POINT_ASSESSMENT_API_URL, {
+                fetch(POINT_ASSESSMENT_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(riskPayload)
                 }),
-                fetchWithRetry(FIELD_BOUNDARY_API_URL, {
+                fetch(FIELD_BOUNDARY_API_URL, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -458,6 +411,10 @@ export default function MapPage() {
                     body: JSON.stringify(boundaryPayload)
                 })
             ]);
+
+            if (!riskRes.ok || !satelliteRes.ok) {
+                throw new Error('Server request failed. Please try again.');
+            }
 
             const riskData = await riskRes.json();
             const satelliteData = await satelliteRes.json();
@@ -477,11 +434,11 @@ export default function MapPage() {
                     risk_ml: riskData
                 },
                 area_hectares: fieldData.hectares,
+                area_acres: fieldData.acres,
                 satellite_monitoring_enabled: true,
                 createdAt: serverTimestamp()
             });
 
-            // Reset payment approval for next assessment
             setPaymentApproved(false);
             setAssessmentCount(prev => prev + 1);
 
@@ -493,7 +450,7 @@ export default function MapPage() {
 
         } catch (error: any) {
             console.error("Analysis Error:", error);
-            showAlert("Connection error. Engines may still be starting. Please wait 30 seconds and try again.", "error");
+            showAlert(error.message || "Analysis failed. Please try again.", "error");
         } finally {
             setIsLoading(false);
         }
@@ -505,6 +462,18 @@ export default function MapPage() {
                 <div className="absolute inset-0 z-50 bg-white/80 backdrop-blur-sm flex flex-col items-center justify-center rounded-2xl">
                     <Loader2 className="animate-spin text-emerald-600 mb-4" size={48} />
                     <p className="text-emerald-800 font-bold animate-pulse">{loadingMessage}</p>
+                </div>
+            )}
+
+            {mapError && (
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
+                    <p className="text-red-800 font-bold mb-2">{mapError}</p>
+                    <button 
+                        onClick={() => window.location.reload()} 
+                        className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
+                    >
+                        Refresh Page
+                    </button>
                 </div>
             )}
 
@@ -547,7 +516,7 @@ export default function MapPage() {
                 <div className="relative w-full h-[600px] bg-slate-100 rounded-2xl overflow-hidden border border-slate-200 shadow-inner group">
                     <div ref={mapContainerRef} className="w-full h-full z-10" />
 
-                    {!fieldData && (
+                    {!fieldData && !isLoading && (
                         <div className="absolute top-4 left-1/2 -translate-x-1/2 bg-white/90 backdrop-blur px-4 py-2 rounded-full shadow-lg z-[400] text-xs font-bold text-slate-600 pointer-events-none group-hover:opacity-0 transition-opacity">
                             Use the polygon tool (top left) to draw your field
                         </div>
@@ -561,8 +530,8 @@ export default function MapPage() {
                             <p className="text-2xl font-black text-emerald-900">{fieldData.hectares.toFixed(2)}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center">
-                            <p className="text-xs uppercase tracking-wider font-bold text-slate-600 mb-1">Area (Sq Meters)</p>
-                            <p className="text-xl font-black text-slate-800">{fieldData.sqMeters.toFixed(0)}</p>
+                            <p className="text-xs uppercase tracking-wider font-bold text-slate-600 mb-1">Area (Acres)</p>
+                            <p className="text-xl font-black text-slate-800">{fieldData.acres.toFixed(2)}</p>
                         </div>
                         <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 text-center col-span-2 md:col-span-2">
                             <p className="text-xs uppercase tracking-wider font-bold text-slate-600 mb-1">Center Point (Risk Analysis Target)</p>
@@ -643,10 +612,10 @@ export default function MapPage() {
                             </div>
                             <h2 className="text-2xl font-bold text-slate-800 mb-4">Payment Required</h2>
                             <p className="text-slate-600 mb-2 leading-relaxed">
-                                You've completed <strong>{assessmentCount} assessments</strong>.
+                                You've completed <strong>{assessmentCount} assessment{assessmentCount !== 1 ? 's' : ''}</strong>.
                             </p>
                             <p className="text-slate-600 mb-8 leading-relaxed">
-                                Your first <strong>2 assessments are free</strong>. Each additional analysis requires payment before processing.
+                                Your <strong>first assessment is free</strong>. Each additional analysis requires payment before processing.
                             </p>
 
                             <div className="space-y-3">
@@ -661,7 +630,7 @@ export default function MapPage() {
                                                     uid: user.uid
                                                 },
                                                 'GHS',
-                                                'PREMIUM', // Using 'PREMIUM' but it's just a gate
+                                                'PREMIUM',
                                                 {
                                                     title: `Field Assessment #${assessmentCount + 1}`,
                                                     description: "Comprehensive Field Analysis & Satellite Monitoring"
@@ -673,19 +642,16 @@ export default function MapPage() {
                                                             return;
                                                         }
                                                         
-                                                        // Just record the payment - no premium status change
                                                         const userRef = doc(db, 'users', user.uid);
                                                         await updateDoc(userRef, {
                                                             lastPaymentRef: ref,
                                                             lastPaymentDate: serverTimestamp()
                                                         });
                                                         
-                                                        // Approve payment and close modal
                                                         setPaymentApproved(true);
                                                         setShowPaymentModal(false);
                                                         showAlert("Payment successful! Running analysis...", "success");
                                                         
-                                                        // Auto-run the analysis
                                                         setTimeout(() => {
                                                             runFieldAnalysis();
                                                         }, 1000);
@@ -712,7 +678,7 @@ export default function MapPage() {
                         </div>
                         <div className="bg-slate-50 p-4 border-t border-slate-100">
                             <p className="text-xs text-slate-400">
-                                First 2 assessments free. Assessments 3+ require payment.
+                                First assessment free. Additional assessments require payment.
                             </p>
                         </div>
                     </div>

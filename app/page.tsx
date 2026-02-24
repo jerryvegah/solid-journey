@@ -21,10 +21,10 @@ const translations: Record<string, TranslationKeys> = {
     audience_title: "Who We Serve",
     audience_farmers_title: "For Farmers & Cooperatives",
     audience_farmers_desc: "Unlock capital, improve yields, and access premium markets",
-    audience_farmers_desc2: "with our AI-powered data tools and Localized climate reports",
+    audience_farmers_desc2: "with our AI-powered data tools and Localized intelligence reports",
     audience_investors_title: "For Investors & Partners",
     audience_investors_desc: "De-risk your investments and drive measurable impact",
-    audience_investors_desc2: "with data-driven strategies and transparent climate reporting",
+    audience_investors_desc2: "with data-driven strategies and transparent intelligence reporting",
     how_title: "How Agricheck Works",
     step1_title: "Remotely map your farm",
     step1_desc: "Use your phone or laptop to draw your farm boundary. Our system analyzes your Farmland.",
@@ -285,7 +285,7 @@ export default function LandingPage() {
             <iframe
               className="absolute inset-0 w-full h-full"
               src="https://www.youtube.com/embed/oJFKbU-Xbe8"
-              title="Agricheck Platform Demo"
+              title="Agricheck Platform"
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
               allowFullScreen

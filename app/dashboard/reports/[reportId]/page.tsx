@@ -1,5 +1,6 @@
 "use client";
 
+import NDVISatelliteImages from '@/components/NDVISatelliteImages';
 import { db, useAuth } from '@/lib/firebase';
 import {
     BarElement,
@@ -17,7 +18,6 @@ import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
-import NDVISatelliteImages from '@/components/NDVISatelliteImages';
 
 // Register ChartJS
 ChartJS.register(
@@ -64,17 +64,17 @@ export default function FullReportPage() {
 
                 if (docSnap.exists()) {
                     const data = docSnap.data();
-                    
+
                     // FIX: Extract data from CORRECT Firebase locations
                     const satelliteData = data.results?.satellite || {};
                     const cropInfo = satelliteData.crop_info || {};
                     const riskAssessment = data.results?.risk_ml?.risk_assessment?.[data.cropType?.toUpperCase()] || {};
-                    
+
                     // FIX: Extract poly_id and field_id from satellite data
                     const polyId = satelliteData.poly_id;
                     const fieldId = satelliteData.field_id;
                     const satelliteMonitoring = data.satellite_monitoring_enabled || satelliteData.satellite_monitoring || false;
-                    
+
                     console.log('🔍 DEBUG - Full Firebase Data:', data);
                     console.log('🔍 DEBUG - Satellite Data:', satelliteData);
                     console.log('🔍 DEBUG - Crop Info:', cropInfo);
@@ -82,7 +82,7 @@ export default function FullReportPage() {
                     console.log('🔍 DEBUG - poly_id:', polyId);
                     console.log('🔍 DEBUG - field_id:', fieldId);
                     console.log('🔍 DEBUG - satellite_monitoring:', satelliteMonitoring);
-                    
+
                     setReport({
                         id: docSnap.id,
                         title: "AI FIELD ANALYSIS",
@@ -104,13 +104,14 @@ export default function FullReportPage() {
                         // FIX: Add satellite monitoring fields
                         poly_id: polyId,
                         field_id: fieldId,
+                        fieldCoordinates: data.fieldCoordinates,
                         satellite_monitoring_enabled: satelliteMonitoring,
                         // Store raw data for debugging
                         _rawCropInfo: cropInfo,
                         _rawRiskAssessment: riskAssessment,
                         _rawSatelliteData: satelliteData
                     });
-                    
+
                     console.log('✅ Report loaded successfully');
                     console.log('   - Stage:', cropInfo.current_stage);
                     console.log('   - NDVI:', cropInfo.expected_peak_ndvi);
@@ -147,7 +148,39 @@ export default function FullReportPage() {
                 mapInstance.current = map;
 
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                L.marker([lat, lng]).addTo(map).bindPopup(report.fieldName).openPopup();
+
+                // Add marker
+                const marker = L.marker([lat, lng]).addTo(map).bindPopup(report.fieldName);
+                if (!report.fieldCoordinates) marker.openPopup();
+
+                // FIX: Add Polygon Overlay if coordinates exist
+                if (report.fieldCoordinates) {
+                    try {
+                        const coords = JSON.parse(report.fieldCoordinates);
+                        const geojson = {
+                            "type": "Feature",
+                            "properties": {},
+                            "geometry": {
+                                "type": "Polygon",
+                                "coordinates": coords
+                            }
+                        };
+
+                        const polygonLayer = L.geoJSON(geojson, {
+                            style: {
+                                color: '#10b981',
+                                weight: 3,
+                                opacity: 0.8,
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(map);
+
+                        // Auto-zoom to the polygon
+                        map.fitBounds(polygonLayer.getBounds(), { padding: [20, 20] });
+                    } catch (err) {
+                        console.error("❌ Error parsing field coordinates:", err);
+                    }
+                }
             } catch (e) {
                 console.error("Map init failed", e);
             }
@@ -399,9 +432,9 @@ export default function FullReportPage() {
                                                 </div>
                                                 <p className="text-xs text-slate-400 font-bold mb-2">/ {(day.temperature_min || 0).toFixed(0)}°</p>
                                                 <p className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full inline-block
-                                                    ${(day.precipitation_sum || 0) > 7 ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}
+                                                    ${(day.precipitation_sum || 0) > 1.9 ? "bg-blue-100 text-blue-700" : "bg-emerald-100 text-emerald-700"}
                                                 `}>
-                                                    {(day.precipitation_sum || 0) > 7 ? "Rain" : "Dry"}
+                                                    {(day.precipitation_sum || 0) > 1.9 ? "Rain today" : "Dry day"}
                                                 </p>
                                             </div>
                                         );
@@ -530,16 +563,16 @@ export default function FullReportPage() {
                                                 y: {
                                                     beginAtZero: true,
                                                     grid: { color: 'rgba(0,0,0,0.05)' },
-                                                    ticks: { 
-                                                        font: { weight: 'bold', size: 10 }, 
-                                                        color: '#64748B' 
+                                                    ticks: {
+                                                        font: { weight: 'bold', size: 10 },
+                                                        color: '#64748B'
                                                     }
                                                 },
                                                 x: {
                                                     grid: { display: false },
-                                                    ticks: { 
-                                                        font: { weight: 'bold', size: 10 }, 
-                                                        color: '#1E293B' 
+                                                    ticks: {
+                                                        font: { weight: 'bold', size: 10 },
+                                                        color: '#1E293B'
                                                     }
                                                 }
                                             }

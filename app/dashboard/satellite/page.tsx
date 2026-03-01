@@ -91,11 +91,11 @@ export default function SatelliteReportsPage() {
 
                 const userAssessments = querySnapshot.docs.map((doc) => {
                     const data = doc.data();
-                    
+
                     // FIX: Extract REAL data from Firebase
                     const cropInfo = data.results?.satellite?.crop_info || {};
                     const riskAssessment = data.results?.risk_ml?.risk_assessment?.[data.cropType?.toUpperCase()] || {};
-                    
+
                     return {
                         id: doc.id,
                         title: "AI FIELD ANALYSIS",
@@ -114,6 +114,7 @@ export default function SatelliteReportsPage() {
                         peakNDVI: cropInfo.expected_peak_ndvi?.toFixed(2) || "0.75",
                         riskLevel: riskAssessment.risk_level || "Unknown",
                         boundaryPoints: data.fieldCoordinates ? JSON.parse(data.fieldCoordinates).length : 0,
+                        fieldCoordinates: data.fieldCoordinates,
                         results: data.results || {}
                     };
                 });
@@ -389,10 +390,47 @@ function ReportDetailsModal({ report, onClose, onViewFull }: { report: any, onCl
             try {
                 const L = (await import('leaflet')).default;
                 const [lat, lng] = report.coordinates.split(',').map((s: string) => parseFloat(s.trim()));
-                const map = L.map(mapRef.current, { center: [lat, lng], zoom: 14, zoomControl: false, attributionControl: false });
+                const map = L.map(mapRef.current, {
+                    center: [lat, lng],
+                    zoom: 14,
+                    zoomControl: false,
+                    attributionControl: false
+                });
                 mapInstance.current = map;
                 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-                L.marker([lat, lng]).addTo(map).bindPopup(report.fieldName).openPopup();
+
+                // Add marker
+                const marker = L.marker([lat, lng]).addTo(map).bindPopup(report.fieldName);
+                if (!report.fieldCoordinates) marker.openPopup();
+
+                // FIX: Add Polygon Overlay if coordinates exist
+                if (report.fieldCoordinates) {
+                    try {
+                        const coords = JSON.parse(report.fieldCoordinates);
+                        const geojson = {
+                            "type": "Feature",
+                            "properties": {},
+                            "geometry": {
+                                "type": "Polygon",
+                                "coordinates": coords
+                            }
+                        };
+
+                        const polygonLayer = L.geoJSON(geojson, {
+                            style: {
+                                color: '#10b981',
+                                weight: 3,
+                                opacity: 0.8,
+                                fillOpacity: 0.2
+                            }
+                        }).addTo(map);
+
+                        // Auto-zoom to the polygon
+                        map.fitBounds(polygonLayer.getBounds(), { padding: [10, 10] });
+                    } catch (err) {
+                        console.error("❌ Error parsing field coordinates:", err);
+                    }
+                }
             } catch (e) { console.error(e); }
         };
         initMap();
@@ -498,7 +536,7 @@ function ReportDetailsModal({ report, onClose, onViewFull }: { report: any, onCl
                                                 {(day.temperature_max || 0).toFixed(0)}° <span className="text-slate-400 text-xs">/ {(day.temperature_min || 0).toFixed(0)}°</span>
                                             </div>
                                             <p className="text-xs text-blue-500 mt-1 font-bold">
-                                                {(day.precipitation_sum || 0) > 7 ? "Rain" : `${(day.precipitation_sum || 0).toFixed(1)} mm`}
+                                                {(day.precipitation_sum || 0) > 1.9 ? "Rain today" : "Dry day"}
                                             </p>
                                         </div>
                                     );

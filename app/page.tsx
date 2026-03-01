@@ -301,7 +301,7 @@ export default function LandingPage() {
             <div className="relative w-32 h-12">
               <Image src="/Agriguard logo new s.png" alt="Logo" fill className="object-contain" />
             </div>
-            <p className="text-slate-400 text-sm leading-relaxed max-w-md">Agricheck helps Farmers, Cooperatives and investors make smarter agricultural decisions.</p>
+            <p className="text-slate-400 text-sm leading-relaxed max-w-md">Agricheck helps Farmers, Cooperatives and investors make smarter agricultural decisions using data.</p>
           </div>
 
           <div className="flex flex-col md:flex-row items-center gap-8">

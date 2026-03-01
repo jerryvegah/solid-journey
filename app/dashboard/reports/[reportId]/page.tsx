@@ -164,7 +164,7 @@ export default function FullReportPage() {
                                 "type": "Polygon",
                                 "coordinates": coords
                             }
-                        };
+                        } as any;
 
                         const polygonLayer = L.geoJSON(geojson, {
                             style: {
@@ -212,15 +212,17 @@ export default function FullReportPage() {
 
     // Chart Data
     const riskComponents = report.results?.risk_ml?.risk_assessment?.[report.crop.toUpperCase()]?.components || {};
+    const rawRiskComponents = report.results?.risk_ml?.risk_components || {};
+
     const chartData = {
         labels: ['Price Volatility', 'Weather Risk', 'Seasonal Risk', 'Suitability'],
         datasets: [{
             label: 'Risk Level %',
             data: [
-                (riskComponents.price_volatility || 0) * 100,
-                (riskComponents.short_term_weather_risk || 0) * 100,
-                (riskComponents.long_term_seasonal_risk || 0) * 100,
-                (riskComponents.suitability_score || 0) * 100
+                (riskComponents.price_volatility || rawRiskComponents.market_risk || 0) * 100,
+                (riskComponents.short_term_weather_risk || rawRiskComponents.weather_risk || 0) * 100,
+                (riskComponents.long_term_seasonal_risk || rawRiskComponents.seasonal_risk || 0) * 100,
+                (riskComponents.suitability_score || (1 - (rawRiskComponents.suitability_risk || 0.5)) || 0) * 100
             ],
             backgroundColor: [
                 'rgba(255, 159, 64, 0.7)',

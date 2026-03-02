@@ -2,7 +2,7 @@
 
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
-import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
@@ -15,6 +15,7 @@ export default function MapPage() {
     const mapContainerRef = useRef<HTMLDivElement>(null);
     const mapInstanceRef = useRef<any>(null);
     const drawnItemsRef = useRef<any>(null);
+    const userLocationMarkerRef = useRef<any>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [loadingMessage, setLoadingMessage] = useState('Initializing map...');
     const [mapError, setMapError] = useState<string | null>(null);
@@ -61,7 +62,7 @@ export default function MapPage() {
                     return new Promise((resolve) => {
                         // Default to Ghana if geolocation fails or takes too long
                         const defaultLocation = { lat: 5.6037, lng: -0.1870 };
-                        
+
                         if (!navigator.geolocation) {
                             resolve(defaultLocation);
                             return;
@@ -97,7 +98,7 @@ export default function MapPage() {
                 // Load Leaflet libraries
                 setLoadingMessage('Loading map components...');
                 const L = (await import('leaflet')).default;
-                
+
                 // Load leaflet-draw with error handling
                 try {
                     // @ts-ignore
@@ -142,10 +143,10 @@ export default function MapPage() {
                 // Satellite layer (optional - will fallback to OSM if Mapbox fails)
                 const mbToken = process.env.NEXT_PUBLIC_MAPBOX_TOKEN;
                 let satelliteLayer;
-                
+
                 if (mbToken) {
                     satelliteLayer = L.tileLayer(
-                        `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mbToken}`, 
+                        `https://api.mapbox.com/styles/v1/mapbox/satellite-v9/tiles/{z}/{x}/{y}?access_token=${mbToken}`,
                         {
                             tileSize: 512,
                             zoomOffset: -1,
@@ -163,15 +164,28 @@ export default function MapPage() {
                     zoomControl: true,
                     preferCanvas: true // Better performance
                 });
-                
+
                 mapInstanceRef.current = map;
 
-                // Add default layer (satellite if available, otherwise OSM)
                 if (satelliteLayer) {
                     satelliteLayer.addTo(map);
                 } else {
                     osmLayer.addTo(map);
                 }
+
+                // Add User Location Marker (Green Dot)
+                const userMarker = L.circleMarker([lat, lng], {
+                    radius: 8,
+                    fillColor: '#10b981', // emerald-500
+                    color: '#fff',
+                    weight: 2,
+                    opacity: 1,
+                    fillOpacity: 1
+                })
+                    .addTo(map)
+                    .bindPopup("Your Location");
+
+                userLocationMarkerRef.current = userMarker;
 
                 // Add layer control if satellite is available
                 if (satelliteLayer) {
@@ -265,7 +279,7 @@ export default function MapPage() {
     useEffect(() => {
         const loadUserData = async () => {
             if (!user || !db) return;
-            
+
             try {
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
@@ -358,7 +372,7 @@ export default function MapPage() {
             showAlert("Please draw a field boundary first", 'warning');
             return;
         }
-        
+
         if (!db) {
             showAlert("Database not initialized. Please refresh the page.", "error");
             return;
@@ -443,7 +457,7 @@ export default function MapPage() {
             setAssessmentCount(prev => prev + 1);
 
             showAlert("Comprehensive Analysis Complete! Redirecting to reports...", 'success');
-            
+
             setTimeout(() => {
                 router.push('/dashboard/satellite');
             }, 2000);
@@ -468,8 +482,8 @@ export default function MapPage() {
             {mapError && (
                 <div className="bg-red-50 border border-red-200 rounded-xl p-6 text-center">
                     <p className="text-red-800 font-bold mb-2">{mapError}</p>
-                    <button 
-                        onClick={() => window.location.reload()} 
+                    <button
+                        onClick={() => window.location.reload()}
                         className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 transition-colors"
                     >
                         Refresh Page
@@ -641,21 +655,21 @@ export default function MapPage() {
                                                             showAlert("Database not initialized. Please contact support.", "error");
                                                             return;
                                                         }
-                                                        
+
                                                         const userRef = doc(db, 'users', user.uid);
                                                         await updateDoc(userRef, {
                                                             lastPaymentRef: ref,
                                                             lastPaymentDate: serverTimestamp()
                                                         });
-                                                        
+
                                                         setPaymentApproved(true);
                                                         setShowPaymentModal(false);
                                                         showAlert("Payment successful! Running analysis...", "success");
-                                                        
+
                                                         setTimeout(() => {
                                                             runFieldAnalysis();
                                                         }, 1000);
-                                                        
+
                                                     } catch (err) {
                                                         console.error("Error recording payment:", err);
                                                         showAlert("Payment successful, but failed to record. Please contact support.", "error");

@@ -1,5 +1,6 @@
 "use client";
 
+import { Currency } from '@/lib/currency';
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
 import {
@@ -60,6 +61,7 @@ export default function SatelliteReportsPage() {
     const [isPremium, setIsPremium] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [pendingReport, setPendingReport] = useState<any>(null);
+    const [userCurrency, setUserCurrency] = useState<Currency>('GHS');
 
     // Load user's assessments and premium status from Firebase
     useEffect(() => {
@@ -78,10 +80,14 @@ export default function SatelliteReportsPage() {
             }
 
             try {
-                // 1. Check Premium Status
+                // 1. Check Premium Status & Currency
                 const userDoc = await getDoc(doc(db, 'users', user.uid));
                 if (userDoc.exists()) {
-                    setIsPremium(userDoc.data().isPremium || false);
+                    const data = userDoc.data();
+                    setIsPremium(data.isPremium || false);
+                    if (data.currency) {
+                        setUserCurrency(data.currency as Currency);
+                    }
                 }
 
                 // 2. Load Assessments with REAL DATA
@@ -240,6 +246,7 @@ export default function SatelliteReportsPage() {
                     user={user}
                     onClose={() => { setShowPaymentModal(false); setPendingReport(null); }}
                     onSuccess={() => setIsPremium(true)}
+                    userCurrency={userCurrency}
                 />
             )}
         </div>
@@ -326,7 +333,7 @@ function ReportCard({ report, onSelect }: { report: any, onSelect: () => void })
 }
 
 // --- Payment Modal ---
-function PaymentModal({ user, onClose, onSuccess }: { user: any, onClose: () => void, onSuccess: () => void }) {
+function PaymentModal({ user, onClose, onSuccess, userCurrency }: { user: any, onClose: () => void, onSuccess: () => void, userCurrency: Currency }) {
     const [isProcessing, setIsProcessing] = useState(false);
 
     const handleUpgrade = () => {
@@ -335,7 +342,7 @@ function PaymentModal({ user, onClose, onSuccess }: { user: any, onClose: () => 
         setIsProcessing(true);
         initiateCheckout(
             { email: user.email || '', name: user.displayName || 'Farmer', uid: user.uid },
-            'GHS',
+            userCurrency,
             'PREMIUM',
             { title: "Agricheck Premium", description: "Unlimited Field Assessments & Risk Analysis" },
             async (ref) => {

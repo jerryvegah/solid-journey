@@ -1,3 +1,5 @@
+import { Currency, getConvertedPrice } from './currency';
+
 // Define types for your configuration
 interface CurrencyConfig {
     amount: string;
@@ -15,7 +17,7 @@ const CONFIG = {
 
 export const initiateCheckout = (
     user: { email: string; name: string; uid: string },
-    currency: 'GHS' | 'XAF',
+    currency: Currency,
     amount: number | 'PREMIUM', // Can be a custom number or 'PREMIUM' to use default
     metadata: { title: string; description: string; logo?: string },
     onSuccess: (ref: string) => void
@@ -23,7 +25,7 @@ export const initiateCheckout = (
     const selected = CONFIG.currencies[currency];
 
     // Detemine actual amount
-    const finalAmount = amount === 'PREMIUM' ? parseFloat(selected.amount) : amount;
+    const finalAmount = amount === 'PREMIUM' ? parseFloat(selected.amount) : getConvertedPrice(amount, currency);
 
     // @ts-ignore (Flutterwave is loaded via CDN)
     if (typeof window !== 'undefined' && (window as any).FlutterwaveCheckout) {

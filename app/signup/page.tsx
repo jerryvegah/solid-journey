@@ -1,5 +1,6 @@
 "use client";
 
+import { detectCountryFromPhone } from '@/lib/currency';
 import { auth, db } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 import { doc, serverTimestamp, setDoc } from 'firebase/firestore';
@@ -100,13 +101,18 @@ export default function SignUpPage() {
                 displayName: formData.name
             });
 
-            // 2. Save to Firestore (users collection)
+            // 2. Detect Country and Currency
+            const { country, currency } = detectCountryFromPhone(formData.phone);
+
+            // 3. Save to Firestore (users collection)
             await setDoc(doc(db, "users", userCredential.user.uid), {
                 uid: userCredential.user.uid,
                 name: formData.name,
                 email: formData.email,
                 phone: formData.phone,
                 preferredLanguage: lang,
+                country: country,
+                currency: currency,
                 role: 'farmer',
                 createdAt: serverTimestamp()
             });

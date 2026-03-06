@@ -8,9 +8,10 @@ import {
     getPackageByCropType,
     InputPackage
 } from '@/lib/contracts';
+import { Currency, formatPrice } from '@/lib/currency';
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
-import { addDoc, collection, getDocs, orderBy, query, serverTimestamp } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, orderBy, query, serverTimestamp } from 'firebase/firestore';
 import { CheckCircle2, CreditCard, MapPin, X } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -41,6 +42,26 @@ export default function InputsPage() {
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [expectedHarvestDate, setExpectedHarvestDate] = useState('');
     const [creatingContract, setCreatingContract] = useState(false);
+    const [userCurrency, setUserCurrency] = useState<Currency>('GHS');
+
+    // Load user currency from Firestore
+    useEffect(() => {
+        const fetchUserCurrency = async () => {
+            if (!user || !db) return;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.currency) {
+                        setUserCurrency(data.currency as Currency);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching user currency:", error);
+            }
+        };
+        fetchUserCurrency();
+    }, [user]);
 
     // Load products from Firebase
     useEffect(() => {
@@ -92,7 +113,7 @@ export default function InputsPage() {
                 name: user.displayName || 'Farmer',
                 uid: user.uid
             },
-            'GHS', // Default to GHS as per request
+            userCurrency,
             product.price,
             {
                 title: `Buy ${product.name}`,
@@ -103,15 +124,17 @@ export default function InputsPage() {
                 try {
                     // FIX: Check db again inside callback
                     if (!db) return;
-                    
+
                     // Record the order in Firestore
                     await addDoc(collection(db, 'InputOrders'), {
                         userId: user.uid,
                         userEmail: user.email,
                         productName: product.name,
                         productId: product.id,
+                        originalAmount: product.price,
+                        originalCurrency: 'GHS',
                         amount: product.price,
-                        currency: 'GHS',
+                        currency: userCurrency,
                         paymentRef: ref,
                         status: 'paid',
                         createdAt: serverTimestamp()
@@ -277,7 +300,7 @@ export default function InputsPage() {
 
                                 <div className="mt-auto">
                                     <div className="flex flex-col items-center mb-4">
-                                        <span className="text-2xl font-extrabold text-emerald-600">GH₵ {product.price}</span>
+                                        <span className="text-2xl font-extrabold text-emerald-600">{formatPrice(product.price, userCurrency)}</span>
                                         <span className="text-xs text-slate-400 font-medium mt-1">
                                             {product.inStock === false || (product.quantity !== undefined && product.quantity <= 0)
                                                 ? 'Out of Stock'
@@ -364,7 +387,7 @@ export default function InputsPage() {
                                     </div>
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
                                         <span className="text-slate-600">Input Value</span>
-                                        <span className="font-bold text-slate-800">GH₵ {contractPackage.totalInputValue.toLocaleString()}</span>
+                                        <span className="font-bold text-slate-800">{formatPrice(contractPackage.totalInputValue, userCurrency)}</span>
                                     </div>
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
                                         <span className="text-slate-600">Repayment Rate</span>

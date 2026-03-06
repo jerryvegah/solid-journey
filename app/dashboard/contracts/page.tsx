@@ -1,7 +1,9 @@
 "use client";
 
 import { FarmerContract, getPackageDetails, getUserContracts, InputPackage } from '@/lib/contracts';
-import { useAuth } from '@/lib/firebase';
+import { Currency, formatPrice } from '@/lib/currency';
+import { db, useAuth } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { Calendar, FileText, MapPin, Package, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 
@@ -11,15 +13,35 @@ export default function ContractsPage() {
     const [loading, setLoading] = useState(true);
     const [selectedContract, setSelectedContract] = useState<FarmerContract | null>(null);
     const [selectedPackage, setSelectedPackage] = useState<InputPackage | null>(null);
+    const [userCurrency, setUserCurrency] = useState<Currency>('GHS');
     const mapRef = useRef<HTMLDivElement>(null);
     const mapInstance = useRef<any>(null);
+
+    // Load user currency from Firestore
+    useEffect(() => {
+        const fetchUserCurrency = async () => {
+            if (!user || !db) return;
+            try {
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.currency) {
+                        setUserCurrency(data.currency as Currency);
+                    }
+                }
+            } catch (error) {
+                console.error("Error fetching user currency:", error);
+            }
+        };
+        fetchUserCurrency();
+    }, [user]);
 
     // Load user contracts
     useEffect(() => {
         const loadContracts = async () => {
             // FIXED: Don't start loading until auth is complete
             if (authLoading) return;
-            
+
             if (!user) {
                 setLoading(false);
                 return;
@@ -270,7 +292,7 @@ export default function ContractsPage() {
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Input Value</p>
-                                        <p className="text-lg font-bold text-slate-800">GH₵ {selectedPackage.totalInputValue.toLocaleString()}</p>
+                                        <p className="text-lg font-bold text-slate-800">{formatPrice(selectedPackage.totalInputValue, userCurrency)}</p>
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Repayment Rate</p>

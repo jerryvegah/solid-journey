@@ -1,8 +1,9 @@
 "use client";
 
+import { Currency } from '@/lib/currency';
 import { db, useAuth } from '@/lib/firebase';
 import { initiateCheckout } from '@/lib/payment';
-import { addDoc, collection, doc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
+import { addDoc, collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet-draw/dist/leaflet.draw.css';
 import 'leaflet/dist/leaflet.css';
 import { CornerUpLeft, CreditCard, Info, Loader2, Lock, MapPinned, MousePointerClick, Satellite, Upload } from 'lucide-react';
@@ -24,6 +25,7 @@ export default function MapPage() {
     const [assessmentCount, setAssessmentCount] = useState(0);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentApproved, setPaymentApproved] = useState(false);
+    const [userCurrency, setUserCurrency] = useState<Currency>('GHS');
 
     // Field Boundary Form States
     const [boundaryCropType, setBoundaryCropType] = useState('maize');
@@ -281,6 +283,15 @@ export default function MapPage() {
             if (!user || !db) return;
 
             try {
+                // Fetch user currency
+                const userDoc = await getDoc(doc(db, 'users', user.uid));
+                if (userDoc.exists()) {
+                    const data = userDoc.data();
+                    if (data.currency) {
+                        setUserCurrency(data.currency as Currency);
+                    }
+                }
+
                 const assessmentsRef = collection(db, 'assessments');
                 const q = query(assessmentsRef, where('userId', '==', user.uid));
                 const querySnapshot = await getDocs(q);
@@ -643,7 +654,7 @@ export default function MapPage() {
                                                     name: user.displayName || 'Farmer',
                                                     uid: user.uid
                                                 },
-                                                'GHS',
+                                                userCurrency,
                                                 'PREMIUM',
                                                 {
                                                     title: `Field Assessment #${assessmentCount + 1}`,

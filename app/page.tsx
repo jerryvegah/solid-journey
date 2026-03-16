@@ -284,7 +284,7 @@ export default function LandingPage() {
           <div className="relative w-full max-w-4xl mx-auto aspect-video rounded-3xl overflow-hidden shadow-2xl border-4 border-emerald-100 bg-slate-900">
             <iframe
               className="absolute inset-0 w-full h-full"
-              src="https://www.youtube.com/embed/oJFKbU-Xbe8"
+              src="https://www.youtube.com/embed/ZslutSw4-JY"
               title="Agricheck Platform"
               frameBorder="0"
               allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"

@@ -311,6 +311,17 @@ export default function LandingPage() {
                 <i className="fa-brands fa-whatsapp"></i> WhatsApp Us
               </a>
             </div>
+            <div className="text-center md:text-left">
+              <h4 className="text-emerald-400 font-bold mb-2 tracking-widest uppercase text-xs">Socials</h4>
+              <div className="flex gap-4 justify-center md:justify-start">
+                <a href="https://web.facebook.com/profile.php?id=61575848271335" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-all text-xl">
+                  <i className="fa-brands fa-facebook"></i>
+                </a>
+                <a href="https://www.linkedin.com/company/agricheck/?viewAsMember=true" target="_blank" rel="noopener noreferrer" className="text-slate-400 hover:text-white transition-all text-xl">
+                  <i className="fa-brands fa-linkedin"></i>
+                </a>
+              </div>
+            </div>
             <div className="flex gap-6 font-bold uppercase text-xs tracking-wider text-slate-500">
               <Link href="/privacy" className="hover:text-emerald-400 transition-colors">{t.footer_privacy}</Link>
               <Link href="/terms" className="hover:text-emerald-400 transition-colors">{t.footer_terms}</Link>

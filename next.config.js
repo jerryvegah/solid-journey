@@ -21,6 +21,16 @@ const nextConfig = {
       },
     ],
   },
+  async rewrites() {
+    return {
+      beforeFiles: [
+        {
+          source: '/api/satellite/:path*',
+          destination: 'http://localhost:5000/:path*',
+        },
+      ],
+    };
+  },
 };
 
 module.exports = nextConfig;

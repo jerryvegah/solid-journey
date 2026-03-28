@@ -38,11 +38,12 @@ export default function MapPage() {
     const [alert, setAlert] = useState<{ type: 'success' | 'error' | 'info' | 'warning', message: string } | null>(null);
 
     // API Endpoints
-    const SATELLITE_BACKEND = 'https://agricheckb2.onrender.com';
+    const SATELLITE_BACKEND = '/api/satellite';
     const RISK_BACKEND = 'https://agricheckb.onrender.com';
+    const SATELLITE_BACKEND_URL = 'https://agricheckb4.onrender.com';
 
     const POINT_ASSESSMENT_API_URL = `${RISK_BACKEND}/assess-crop-risk`;
-    const FIELD_BOUNDARY_API_URL = `${SATELLITE_BACKEND}/fields`;
+   const FIELD_BOUNDARY_API_URL = `${SATELLITE_BACKEND_URL}/fields`;
 
     // Helper: Show Alert
     const showAlert = (message: string, type: 'success' | 'error' | 'info' | 'warning' = 'error') => {

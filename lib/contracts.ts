@@ -24,7 +24,11 @@ export interface FarmerContract {
     id: string;
     userId: string; // CHANGED: from farmerId to userId to match Firestore rules
     farmerEmail: string;
-    packageId: string;
+    packageId?: string; // Optional (legacy)
+    productId?: string; // New for dynamic
+    productName?: string; // New
+    quantity?: number; // New
+    unitPrice?: number; // New
     cropType: string;
     totalAcres: number;
     totalProduceDue: number;
@@ -158,10 +162,38 @@ export async function getPackageByCropType(cropType: string): Promise<InputPacka
 }
 
 /**
- * Calculate total produce due based on package and acres
+ * Calculate total produce due based on package and acres (Legacy)
  */
 export function calculateProduceDue(producePerAcre: number, acres: number): number {
     return producePerAcre * acres;
+}
+
+export const FARMGATE_PRICES_FCFA = {
+    Maize: 120,
+    Soybean: 400,
+    Rice: 300,
+    Sorghum: 400
+};
+
+/**
+ * Calculate produce due based on dynamic cost and farmgate prices
+ */
+export function calculateProduceDueDynamic(
+    totalCostGHS: number,
+    cropType: string,
+    bagWeightKg: number = 100
+): number {
+    // Assuming 1 GHS = 50 FCFA. Let's do the math in FCFA for simplicity.
+    const totalCostFCFA = totalCostGHS * 50;
+    
+    // Get the farmgate price; default to Maize if unknown
+    const normalizedCrop = cropType.charAt(0).toUpperCase() + cropType.slice(1).toLowerCase();
+    const farmgatePriceFCFA = FARMGATE_PRICES_FCFA[normalizedCrop as keyof typeof FARMGATE_PRICES_FCFA] || FARMGATE_PRICES_FCFA.Maize;
+    
+    // Total repayment needed in kg
+    const requiredKg = totalCostFCFA / farmgatePriceFCFA;
+    
+    return requiredKg / bagWeightKg;
 }
 
 /**
@@ -211,7 +243,8 @@ export async function checkUserHasFarm(userId: string): Promise<{ hasFarm: boole
 export async function createContract(
     userId: string,
     userEmail: string,
-    packageId: string,
+    productData: { id: string; name: string; quantity: number; price: number },
+    cropType: string,
     farmData: any,
     expectedHarvestDate: string
 ): Promise<{ success: boolean; contractId?: string; error?: string }> {
@@ -221,20 +254,19 @@ export async function createContract(
             return { success: false, error: 'Database not initialized' };
         }
 
-        const packageDetails = await getPackageDetails(packageId);
-
-        if (!packageDetails) {
-            return { success: false, error: 'Package not found' };
-        }
-
         const totalAcres = farmData.area_hectares * 2.47105; // Convert hectares to acres
-        const totalProduceDue = calculateProduceDue(packageDetails.produceRepaymentPerAcre, totalAcres);
+        
+        const totalCostGHS = productData.price * productData.quantity;
+        const totalProduceDue = calculateProduceDueDynamic(totalCostGHS, cropType, 100);
 
         const contractData: Omit<FarmerContract, 'id'> = {
             userId: userId, // CHANGED: from farmerId to userId
             farmerEmail: userEmail,
-            packageId: packageId,
-            cropType: packageDetails.cropType,
+            productId: productData.id,
+            productName: productData.name,
+            quantity: productData.quantity,
+            unitPrice: productData.price,
+            cropType: cropType,
             totalAcres: parseFloat(totalAcres.toFixed(2)),
             totalProduceDue: parseFloat(totalProduceDue.toFixed(1)),
             farmBoundary: farmData.fieldCoordinates || JSON.stringify(farmData.field_coordinates || []),

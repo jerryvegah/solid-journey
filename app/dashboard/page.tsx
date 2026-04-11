@@ -9,7 +9,9 @@ import {
   where, 
   getDocs
 } from 'firebase/firestore';
-import { FileText, Package, Satellite, Loader2 } from 'lucide-react';
+import { FileText, Package, Satellite, Loader2, ArrowRight, Store, Map, PenTool } from 'lucide-react';
+import DashboardWeather from '@/components/DashboardWeather';
+import Link from 'next/link';
 
 export default function DashboardPage() {
     const [user, setUser] = useState<any>(null);
@@ -101,7 +103,9 @@ export default function DashboardPage() {
                         area: latestAssessment?.area_hectares || 0,
                         date: latestAssessment?.createdAt?.toDate?.() 
                             ? latestAssessment.createdAt.toDate().toLocaleDateString() 
-                            : 'N/A'
+                            : 'N/A',
+                        lat: latestAssessment?.latitude || latestAssessment?.farmLocation?.lat || 5.6037,
+                        lng: latestAssessment?.longitude || latestAssessment?.farmLocation?.lng || -0.1870
                     });
                 }
             } catch (error) {
@@ -258,16 +262,44 @@ export default function DashboardPage() {
     return (
         <div className="space-y-8 max-w-7xl mx-auto p-4">
             {/* Welcome Banner */}
-            <div className="bg-emerald-500 rounded-3xl p-8 md:p-12 text-white shadow-lg relative overflow-hidden">
+            <div className="bg-emerald-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden transition-all hover:shadow-2xl">
                 <div className="relative z-10">
-                    <h1 className="text-3xl md:text-4xl font-bold mb-4">
+                    <h1 className="text-3xl md:text-4xl font-bold mb-4 drop-shadow-sm">
                         Welcome back{user?.displayName ? `, ${user.displayName}` : ''}!
                     </h1>
-                    <p className="text-emerald-100 text-lg max-w-2xl">
+                    <p className="text-emerald-50 text-lg max-w-2xl font-medium">
                         Manage your farm inputs, monitor crops, and track contracts all in one place.
                     </p>
                 </div>
-                <div className="absolute -right-20 -top-20 w-64 h-64 bg-white/10 rounded-full blur-3xl"></div>
+                <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
+            </div>
+
+            {/* Quick Actions Hub */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 -mt-4 relative z-20 mx-2 md:mx-6">
+                <Link href="/dashboard/inputs" className="bg-white p-4 rounded-2xl shadow-md border border-emerald-50 flex items-center justify-between hover:bg-emerald-50/50 hover:border-emerald-200 hover:-translate-y-1 transition-all group">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Store size={20} /></div>
+                        <span className="font-bold text-slate-700 group-hover:text-emerald-800 transition-colors">Order Inputs</span>
+                    </div>
+                    <ArrowRight size={20} className="text-emerald-200 group-hover:text-emerald-600 group-hover:translate-x-1 transition-transform" />
+                </Link>
+
+                <Link href="/dashboard/satellite" className="bg-white p-4 rounded-2xl shadow-md border border-blue-50 flex items-center justify-between hover:bg-blue-50/50 hover:border-blue-200 hover:-translate-y-1 transition-all group">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-blue-100 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-500 group-hover:text-white transition-colors"><Map size={20} /></div>
+                        <span className="font-bold text-slate-700 group-hover:text-blue-800 transition-colors">Scan Crop Health</span>
+                    </div>
+                    <ArrowRight size={20} className="text-blue-200 group-hover:text-blue-600 group-hover:translate-x-1 transition-transform" />
+                </Link>
+
+                <Link href="/dashboard/contracts" className="bg-white p-4 rounded-2xl shadow-md border border-purple-50 flex items-center justify-between hover:bg-purple-50/50 hover:border-purple-200 hover:-translate-y-1 transition-all group">
+                    <div className="flex items-center gap-3">
+                        <div className="bg-purple-100 p-2.5 rounded-xl text-purple-600 group-hover:bg-purple-500 group-hover:text-white transition-colors"><PenTool size={20} /></div>
+                        <span className="font-bold text-slate-700 group-hover:text-purple-800 transition-colors">Create Contract</span>
+                    </div>
+                    <ArrowRight size={20} className="text-purple-200 group-hover:text-purple-600 group-hover:translate-x-1 transition-transform" />
+                </Link>
             </div>
 
             {/* Stats Grid */}
@@ -277,45 +309,56 @@ export default function DashboardPage() {
                 <StatCard icon={<Satellite />} title="Satellite Reports" value={stats.satelliteReports} />
             </div>
 
+            {/* Live Weather Forecast */}
+            <div className="mt-8">
+                <DashboardWeather 
+                    latitude={latestReport?.lat || 5.6037} 
+                    longitude={latestReport?.lng || -0.1870} 
+                />
+            </div>
+
             {/* Recent Activity Section */}
-            <div>
+            <div className="mt-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-6">Recent Activity</h2>
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     
                     {/* Latest Contract Card */}
                     <ActivityCard 
                         title="Latest Contract" 
-                        icon={<FileText size={18} className="text-emerald-500" />}
+                        icon={<FileText size={18} className="text-emerald-500 group-hover:text-emerald-600" />}
                         data={latestContract ? [
                             { label: "Crop Type", value: latestContract.cropType },
                             { label: "Produce Due", value: `${latestContract.totalProduceDue} Bags` },
                             { label: "Status", value: latestContract.status }
                         ] : null}
                         emptyMessage="No active contracts found."
+                        ctaData={{ label: "Start your first contract", href: "/dashboard/contracts" }}
                     />
 
                     {/* Latest Satellite Report */}
                     <ActivityCard 
                         title="Latest Satellite Report" 
-                        icon={<Satellite size={18} className="text-emerald-500" />}
+                        icon={<Satellite size={18} className="text-emerald-500 group-hover:text-emerald-600" />}
                         data={latestReport ? [
                             { label: "Crop Type", value: latestReport.cropType },
                             { label: "Location", value: latestReport.fieldLocation },
                             { label: "Area", value: `${latestReport.area.toFixed(2)} ha` }
                         ] : null}
                         emptyMessage="No reports available yet."
+                        ctaData={{ label: "Run a farm scan", href: "/dashboard/satellite" }}
                     />
 
                     {/* Latest Input Package */}
                     <ActivityCard 
                         title="Latest Input Package" 
-                        icon={<Package size={18} className="text-emerald-500" />}
+                        icon={<Package size={18} className="text-emerald-500 group-hover:text-emerald-600" />}
                         data={latestInput ? [
                             { label: "Product", value: latestInput.productName },
                             { label: "Amount", value: `GH₵ ${latestInput.amount}` },
                             { label: "Date", value: latestInput.date }
                         ] : null}
                         emptyMessage="No recent orders."
+                        ctaData={{ label: "Browse input packages", href: "/dashboard/inputs" }}
                     />
                 </div>
             </div>
@@ -340,35 +383,51 @@ export default function DashboardPage() {
 // Helper Sub-components
 function StatCard({ icon, title, value }: { icon: any, title: string, value: number }) {
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all hover:shadow-md">
-            <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-xl flex items-center justify-center mb-4">
-                {icon}
+        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 hover:border-emerald-100 group relative overflow-hidden">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-50 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+            <div className="relative z-10">
+                <div className="w-12 h-12 bg-slate-50 text-slate-500 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors duration-300">
+                    {icon}
+                </div>
+                <h3 className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1 group-hover:text-emerald-700 transition-colors">{title}</h3>
+                <p className="text-4xl font-bold text-slate-800 group-hover:scale-105 origin-left transition-transform duration-300 flex items-center gap-2">
+                    {value} 
+                </p>
             </div>
-            <h3 className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1">{title}</h3>
-            <p className="text-4xl font-bold text-slate-800">{value}</p>
         </div>
     );
 }
 
-function ActivityCard({ title, icon, data, emptyMessage }: { title: string, icon: any, data: any[] | null, emptyMessage: string }) {
+function ActivityCard({ title, icon, data, emptyMessage, ctaData }: { title: string, icon: any, data: any[] | null, emptyMessage: string, ctaData?: {label: string, href: string} }) {
     return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden hover:shadow-md transition-shadow group flex flex-col h-full">
+            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex justify-between items-center group-hover:bg-slate-100/50 transition-colors">
                 <div className="flex items-center gap-2 font-bold text-slate-700">
                     {icon} {title}
                 </div>
             </div>
-            <div className="p-6 space-y-4">
-                {data ? data.map((item, i) => (
-                    <div key={i}>
-                        <div className="flex justify-between items-center">
-                            <span className="text-slate-500 text-sm">{item.label}</span>
-                            <span className="font-semibold text-slate-800 text-right">{item.value}</span>
-                        </div>
-                        {i < data.length - 1 && <div className="w-full h-px bg-slate-100 mt-4"></div>}
+            <div className="p-6 flex-1 flex flex-col justify-center">
+                {data ? (
+                    <div className="space-y-4">
+                        {data.map((item, i) => (
+                            <div key={i}>
+                                <div className="flex justify-between items-center group/item hover:bg-slate-50 p-1 -mx-1 rounded transition-colors">
+                                    <span className="text-slate-500 text-sm">{item.label}</span>
+                                    <span className="font-semibold text-slate-800 text-right group-hover/item:text-emerald-700 transition-colors">{item.value}</span>
+                                </div>
+                                {i < data.length - 1 && <div className="w-full h-px bg-slate-100 mt-3 mb-1"></div>}
+                            </div>
+                        ))}
                     </div>
-                )) : (
-                    <p className="text-slate-400 text-sm italic">{emptyMessage}</p>
+                ) : (
+                    <div className="text-center py-4 space-y-4 flex flex-col items-center justify-center h-full">
+                        <p className="text-slate-400 text-sm italic">{emptyMessage}</p>
+                        {ctaData && (
+                            <Link href={ctaData.href} className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-emerald-50 text-emerald-700 rounded-xl text-sm font-bold hover:bg-emerald-500 hover:text-white transition-all transform hover:-translate-y-0.5 w-full sm:w-auto">
+                                {ctaData.label} <ArrowRight size={16} />
+                            </Link>
+                        )}
+                    </div>
                 )}
             </div>
         </div>

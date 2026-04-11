@@ -1,12 +1,9 @@
 "use client";
 
 import {
-    calculateProduceDue,
+    calculateProduceDueDynamic,
     checkUserHasFarm,
-    createContract,
-    getInputPackages,
-    getPackageByCropType,
-    InputPackage
+    createContract
 } from '@/lib/contracts';
 import { Currency, formatPrice } from '@/lib/currency';
 import { db, useAuth } from '@/lib/firebase';
@@ -37,11 +34,16 @@ export default function InputsPage() {
     const [showContractModal, setShowContractModal] = useState(false);
     const [showTermsModal, setShowTermsModal] = useState(false);
     const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
-    const [contractPackage, setContractPackage] = useState<InputPackage | null>(null);
+    const [selectedQuantity, setSelectedQuantity] = useState<number>(1);
     const [farmData, setFarmData] = useState<any>(null);
     const [termsAccepted, setTermsAccepted] = useState(false);
     const [expectedHarvestDate, setExpectedHarvestDate] = useState('');
     const [creatingContract, setCreatingContract] = useState(false);
+    const [showCheckoutModal, setShowCheckoutModal] = useState(false);
+    const [checkoutProduct, setCheckoutProduct] = useState<Product | null>(null);
+    const [checkoutQuantity, setCheckoutQuantity] = useState(1);
+    const [deliveryAddress, setDeliveryAddress] = useState('');
+    const [phoneNumber, setPhoneNumber] = useState('');
     const [userCurrency, setUserCurrency] = useState<Currency>('GHS');
 
     // Load user currency from Firestore
@@ -94,52 +96,67 @@ export default function InputsPage() {
         loadProducts();
     }, []);
 
-    // Handle direct "Buy Now" with Flutterwave
+    // Handle direct "Buy Now" button (opens checkout modal)
     const handleBuyNow = (product: Product) => {
         if (!user) {
             alert('Please sign in to make a purchase');
             return;
         }
 
-        // FIX: Add null check for db
-        if (!db) {
-            alert('Database not initialized. Please refresh the page.');
+        setCheckoutProduct(product);
+        setCheckoutQuantity(1);
+        setShowCheckoutModal(true);
+    };
+
+    // Process Flutterwave payment after capturing delivery details
+    const processCheckout = () => {
+        if (!user || !db || !checkoutProduct) return;
+        
+        if (!deliveryAddress.trim() || !phoneNumber.trim()) {
+            alert('Please provide delivery address and phone number.');
             return;
         }
+
+        const totalAmount = checkoutProduct.price * checkoutQuantity;
 
         initiateCheckout(
             {
                 email: user.email || '',
                 name: user.displayName || 'Farmer',
-                uid: user.uid
+                uid: user.uid,
+                phone: phoneNumber
             },
             userCurrency,
-            product.price,
+            totalAmount,
             {
-                title: `Buy ${product.name}`,
-                description: `Purchasing ${product.name} from Agricheck Marketplace`,
-                logo: product.image
+                title: `Buy ${checkoutProduct.name}`,
+                description: `Purchasing ${checkoutQuantity}x ${checkoutProduct.name}`,
+                logo: checkoutProduct.image
             },
             async (ref) => {
                 try {
-                    // FIX: Check db again inside callback
                     if (!db) return;
 
-                    // Record the order in Firestore
                     await addDoc(collection(db, 'InputOrders'), {
                         userId: user.uid,
                         userEmail: user.email,
-                        productName: product.name,
-                        productId: product.id,
-                        originalAmount: product.price,
+                        productName: checkoutProduct.name,
+                        productId: checkoutProduct.id,
+                        quantity: checkoutQuantity,
+                        deliveryAddress,
+                        phoneNumber,
+                        originalAmount: totalAmount,
                         originalCurrency: 'GHS',
-                        amount: product.price,
+                        amount: totalAmount,
                         currency: userCurrency,
                         paymentRef: ref,
                         status: 'paid',
                         createdAt: serverTimestamp()
                     });
-                    alert(`Success! Your order for ${product.name} has been placed. We will contact you for delivery details.`);
+                    alert(`Success! Your order for ${checkoutProduct.name} has been placed. We will contact you for delivery.`);
+                    setShowCheckoutModal(false);
+                    setDeliveryAddress('');
+                    setPhoneNumber('');
                 } catch (error) {
                     console.error("Error recording order:", error);
                     alert("Payment successful, but we failed to record your order. Please contact support with ref: " + ref);
@@ -165,31 +182,8 @@ export default function InputsPage() {
             return;
         }
 
-        // Get contract package for this crop type
-        // Priority: 1. product.cropType, 2. userFarm.cropType (if product is generic), 3. extract from name
-        let cropType = product.cropType;
-
-        if (!cropType && userFarm && userFarm.cropType) {
-            // If the product is generic (like Compost) and the user has a farm, 
-            // use the farm's crop type to find the appropriate credit package.
-            cropType = userFarm.cropType;
-        }
-
-        if (!cropType) {
-            cropType = extractCropTypeFromProduct(product);
-        }
-
-        const packageData = await getPackageByCropType(cropType);
-
-        if (!packageData) {
-            const allPackages = await getInputPackages();
-            const availableNames = allPackages.map(p => p.cropType).join(', ') || 'None';
-            alert(`No contract package available for ${cropType}. \n\nAvailable packages: ${availableNames}`);
-            return;
-        }
-
         setSelectedProduct(product);
-        setContractPackage(packageData);
+        setSelectedQuantity(1);
         setFarmData(userFarm);
         setShowContractModal(true);
     };
@@ -219,14 +213,22 @@ export default function InputsPage() {
             return;
         }
 
-        if (!user || !contractPackage || !farmData) return;
+        if (!user || !selectedProduct || !farmData) return;
 
         setCreatingContract(true);
+
+        const cropType = extractCropTypeFromProduct(selectedProduct) || farmData?.cropType || 'Maize';
 
         const result = await createContract(
             user.uid,
             user.email || '',
-            contractPackage.id,
+            {
+                id: selectedProduct.id,
+                name: selectedProduct.name,
+                quantity: selectedQuantity,
+                price: selectedProduct.price
+            },
+            cropType,
             farmData,
             expectedHarvestDate
         );
@@ -255,7 +257,10 @@ export default function InputsPage() {
     }
 
     const totalAcres = farmData ? (farmData.area_hectares * 2.47105) : 0;
-    const totalProduceDue = contractPackage ? calculateProduceDue(contractPackage.produceRepaymentPerAcre, totalAcres) : 0;
+    
+    const contractCropType = selectedProduct ? (extractCropTypeFromProduct(selectedProduct) || farmData?.cropType || 'Maize') : 'Maize';
+    const totalInputCostGHS = selectedProduct ? selectedProduct.price * selectedQuantity : 0;
+    const totalProduceDue = selectedProduct ? calculateProduceDueDynamic(totalInputCostGHS, contractCropType, 100) : 0;
 
     return (
         <div className="max-w-7xl mx-auto">
@@ -345,13 +350,13 @@ export default function InputsPage() {
             )}
 
             {/* Contract Preview Modal */}
-            {showContractModal && contractPackage && (
+            {showContractModal && selectedProduct && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowContractModal(false)}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Contract Preview</h2>
-                                <p className="text-slate-500 text-sm mt-1">{contractPackage.packageName}</p>
+                                <p className="text-slate-500 text-sm mt-1">{selectedProduct.name}</p>
                             </div>
                             <button onClick={() => setShowContractModal(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full">
                                 <X size={24} />
@@ -380,30 +385,35 @@ export default function InputsPage() {
                             {/* Contract Details */}
                             <div>
                                 <h3 className="font-bold text-slate-800 mb-3">Contract Terms</h3>
-                                <div className="space-y-3 text-sm">
+                                <div className="space-y-4 text-sm">
+                                    
+                                    {/* Product Quantity Prompt */}
+                                    <div>
+                                        <label className="block text-sm font-bold text-slate-700 mb-2">Quantity Needed</label>
+                                        <input
+                                            type="number"
+                                            min="1"
+                                            value={selectedQuantity}
+                                            onChange={(e) => setSelectedQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                            className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                        />
+                                    </div>
+
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
-                                        <span className="text-slate-600">Crop Type</span>
-                                        <span className="font-bold text-slate-800">{contractPackage.cropType}</span>
+                                        <span className="text-slate-600">Product</span>
+                                        <span className="font-bold text-slate-800">{selectedProduct.name}</span>
                                     </div>
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
-                                        <span className="text-slate-600">Input Value</span>
-                                        <span className="font-bold text-slate-800">{formatPrice(contractPackage.totalInputValue, userCurrency)}</span>
+                                        <span className="text-slate-600">Crop Type (For Repayment)</span>
+                                        <span className="font-bold text-slate-800">{contractCropType}</span>
                                     </div>
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
-                                        <span className="text-slate-600">Repayment Rate</span>
-                                        <span className="font-bold text-slate-800">{contractPackage.produceRepaymentPerAcre} bags/acre</span>
+                                        <span className="text-slate-600">Total Input Cost</span>
+                                        <span className="font-bold text-slate-800">{formatPrice(totalInputCostGHS, userCurrency)}</span>
                                     </div>
                                     <div className="flex justify-between border-b border-slate-100 pb-2">
-                                        <span className="text-slate-600">Produce Type</span>
-                                        <span className="font-bold text-slate-800">{contractPackage.produceType}</span>
-                                    </div>
-                                    <div className="flex justify-between border-b border-slate-100 pb-2">
-                                        <span className="text-slate-600">Bag Weight</span>
-                                        <span className="font-bold text-slate-800">{contractPackage.bagWeight}kg</span>
-                                    </div>
-                                    <div className="flex justify-between">
-                                        <span className="text-slate-600">Repayment Timeline</span>
-                                        <span className="font-bold text-slate-800">{contractPackage.repaymentTimeline}</span>
+                                        <span className="text-slate-600">Repayment Mode</span>
+                                        <span className="font-bold text-slate-800">Dynamic (Based on Farmgate Price)</span>
                                     </div>
                                 </div>
                             </div>
@@ -412,10 +422,10 @@ export default function InputsPage() {
                             <div className="bg-emerald-50 rounded-xl p-4 border-2 border-emerald-200">
                                 <h3 className="font-bold text-emerald-800 mb-2">Total Produce Due</h3>
                                 <p className="text-3xl font-extrabold text-emerald-600">
-                                    {totalProduceDue.toFixed(1)} Bags
+                                    {totalProduceDue.toFixed(2)} Bags
                                 </p>
                                 <p className="text-xs text-emerald-700 mt-1">
-                                    ({contractPackage.produceRepaymentPerAcre} bags/acre × {totalAcres.toFixed(2)} acres)
+                                    Calculated using fixed farmgate price for ({contractCropType})
                                 </p>
                             </div>
 
@@ -512,6 +522,74 @@ export default function InputsPage() {
                                     Close
                                 </button>
                             </div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Checkout & Delivery Modal */}
+            {showCheckoutModal && checkoutProduct && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setShowCheckoutModal(false)}>
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+                        <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
+                            <div>
+                                <h2 className="text-2xl font-bold text-slate-800">Checkout</h2>
+                                <p className="text-slate-500 text-sm mt-1">{checkoutProduct.name}</p>
+                            </div>
+                            <button onClick={() => setShowCheckoutModal(false)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full">
+                                <X size={24} />
+                            </button>
+                        </div>
+
+                        <div className="p-6 space-y-4">
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Quantity</label>
+                                <input
+                                    type="number"
+                                    min="1"
+                                    value={checkoutQuantity}
+                                    onChange={(e) => setCheckoutQuantity(Math.max(1, parseInt(e.target.value) || 1))}
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                />
+                            </div>
+                            
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Delivery Address</label>
+                                <textarea
+                                    value={deliveryAddress}
+                                    onChange={(e) => setDeliveryAddress(e.target.value)}
+                                    placeholder="Enter your full farm or home address"
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 min-h-[80px]"
+                                    required
+                                />
+                            </div>
+
+                            <div>
+                                <label className="block text-sm font-bold text-slate-700 mb-2">Phone Number</label>
+                                <input
+                                    type="tel"
+                                    value={phoneNumber}
+                                    onChange={(e) => setPhoneNumber(e.target.value)}
+                                    placeholder="e.g. +233..."
+                                    className="w-full px-4 py-3 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-emerald-500"
+                                    required
+                                />
+                            </div>
+
+                            <div className="flex justify-between items-center bg-slate-50 p-4 rounded-xl border border-slate-200 mt-6">
+                                <span className="font-bold text-slate-700">Total Price:</span>
+                                <span className="text-2xl font-bold text-emerald-600">
+                                    {formatPrice(checkoutProduct.price * checkoutQuantity, userCurrency)}
+                                </span>
+                            </div>
+
+                            <button
+                                onClick={processCheckout}
+                                className="w-full bg-emerald-600 text-white font-bold py-4 rounded-xl hover:bg-emerald-700 transition-colors mt-4 flex items-center justify-center gap-2"
+                            >
+                                <CreditCard size={20} />
+                                Proceed to Payment
+                            </button>
                         </div>
                     </div>
                 </div>

@@ -16,7 +16,7 @@ const CONFIG = {
 };
 
 export const initiateCheckout = (
-    user: { email: string; name: string; uid: string },
+    user: { email: string; name: string; uid: string; phone?: string },
     currency: Currency,
     amount: number | 'PREMIUM', // Can be a custom number or 'PREMIUM' to use default
     metadata: { title: string; description: string; logo?: string },
@@ -38,6 +38,7 @@ export const initiateCheckout = (
             customer: {
                 email: user.email,
                 name: user.name,
+                phone: user.phone || undefined,
             },
             customizations: {
                 title: metadata.title,

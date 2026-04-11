@@ -63,8 +63,12 @@ export default function ContractsPage() {
     // Handle view contract details
     const handleViewContract = async (contract: FarmerContract) => {
         setSelectedContract(contract);
-        const packageData = await getPackageDetails(contract.packageId);
-        setSelectedPackage(packageData);
+        if (contract.packageId) {
+            const packageData = await getPackageDetails(contract.packageId);
+            setSelectedPackage(packageData);
+        } else {
+            setSelectedPackage(null);
+        }
     };
 
     // Initialize map when modal opens
@@ -231,13 +235,15 @@ export default function ContractsPage() {
             )}
 
             {/* Contract Details Modal */}
-            {selectedContract && selectedPackage && (
+            {selectedContract && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedContract(null)}>
                     <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
                         <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
                             <div>
                                 <h2 className="text-2xl font-bold text-slate-800">Contract Details</h2>
-                                <p className="text-slate-500 text-sm mt-1">{selectedPackage.packageName}</p>
+                                <p className="text-slate-500 text-sm mt-1">
+                                    {selectedContract.productName ? selectedContract.productName : (selectedPackage?.packageName || 'Buy Now Pay Later Contract')}
+                                </p>
                             </div>
                             <button onClick={() => setSelectedContract(null)} className="text-slate-400 hover:text-slate-600 p-2 hover:bg-slate-100 rounded-full">
                                 <X size={24} />
@@ -292,11 +298,17 @@ export default function ContractsPage() {
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Input Value</p>
-                                        <p className="text-lg font-bold text-slate-800">{formatPrice(selectedPackage.totalInputValue, userCurrency)}</p>
+                                        <p className="text-lg font-bold text-slate-800">
+                                            {selectedContract.productName && selectedContract.unitPrice && selectedContract.quantity 
+                                                ? formatPrice(selectedContract.unitPrice * selectedContract.quantity, userCurrency)
+                                                : (selectedPackage ? formatPrice(selectedPackage.totalInputValue, userCurrency) : 'N/A')}
+                                        </p>
                                     </div>
                                     <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
-                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Repayment Rate</p>
-                                        <p className="text-lg font-bold text-slate-800">{selectedPackage.produceRepaymentPerAcre} bags/acre</p>
+                                        <p className="text-xs font-bold text-slate-500 uppercase mb-1">Repayment Mode</p>
+                                        <p className="text-lg font-bold text-slate-800">
+                                            {selectedContract.productName ? 'Dynamic (Farmgate Price)' : (selectedPackage ? `${selectedPackage.produceRepaymentPerAcre} bags/acre` : 'Dynamic')}
+                                        </p>
                                     </div>
                                     <div className="bg-emerald-50 rounded-xl p-4 border-2 border-emerald-200">
                                         <p className="text-xs font-bold text-emerald-600 uppercase mb-1">Total Produce Due</p>
@@ -312,12 +324,19 @@ export default function ContractsPage() {
                                     Inputs Included
                                 </h3>
                                 <div className="space-y-2">
-                                    {selectedPackage.inputsIncluded.map((input, index) => (
-                                        <div key={index} className="flex justify-between items-center bg-slate-50 rounded-lg p-3 border border-slate-200">
-                                            <span className="font-bold text-slate-700">{input.productName}</span>
-                                            <span className="text-slate-500">Qty: {input.quantity}</span>
+                                    {selectedContract.productName ? (
+                                        <div className="flex justify-between items-center bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                            <span className="font-bold text-slate-700">{selectedContract.productName}</span>
+                                            <span className="text-slate-500">Qty: {selectedContract.quantity}</span>
                                         </div>
-                                    ))}
+                                    ) : (
+                                        selectedPackage?.inputsIncluded.map((input, index) => (
+                                            <div key={index} className="flex justify-between items-center bg-slate-50 rounded-lg p-3 border border-slate-200">
+                                                <span className="font-bold text-slate-700">{input.productName}</span>
+                                                <span className="text-slate-500">Qty: {input.quantity}</span>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
 
@@ -344,7 +363,7 @@ export default function ContractsPage() {
                                     )}
                                     <div className="flex justify-between">
                                         <span className="text-slate-600">Repayment Deadline</span>
-                                        <span className="font-bold text-slate-800">{selectedPackage.repaymentTimeline}</span>
+                                        <span className="font-bold text-slate-800">{selectedPackage?.repaymentTimeline || 'End of expected harvest phase'}</span>
                                     </div>
                                 </div>
                             </div>

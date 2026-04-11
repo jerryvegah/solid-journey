@@ -32,25 +32,25 @@ export default function ContractTermsPage() {
                             <ul className="list-disc list-inside space-y-2 ml-4">
                                 <li>Borrower must have a verified Agricheck account</li>
                                 <li>Borrower must have mapped their farm boundary using the Map Farm tool</li>
-                                <li>Farm must be located within Ghana</li>
+                                <li>Farm must be located within Cameroon or Ghana</li>
                                 <li>Borrower must be cultivating one of the supported crops: Maize, Rice, Soybean, or Sorghum</li>
                             </ul>
                         </section>
 
                         {/* Section 3 */}
                         <section>
-                            <h2 className="text-xl font-bold text-slate-800 mb-3">3. Credit Facility & Input Packages</h2>
+                            <h2 className="text-xl font-bold text-slate-800 mb-3">3. Credit Facility & Dynamic Inputs</h2>
                             <p className="mb-3">
-                                The Company provides standardized input packages tailored to specific crops. Each package includes:
+                                The Company provides farm inputs where the repayment is dynamically calculated based on the total monetary cost of the inputs taken, converted into a produce equivalent. Base farmgate prices used for conversions are:
                             </p>
                             <ul className="list-disc list-inside space-y-2 ml-4">
-                                <li><strong>Maize Production Contract:</strong> Seeds, NPK Compound, Urea | Repayment: 6 bags/acre</li>
-                                <li><strong>Soybean Booster Contract:</strong> Seeds, Inoculant, Liquid Fertilizer | Repayment: 3.5 bags/acre</li>
-                                <li><strong>Rice Grower Contract:</strong> Paddy Seeds, NPK Compound, Urea | Repayment: 8 bags/acre</li>
-                                <li><strong>Sorghum Resilience Contract:</strong> Seeds, NPK Compound, Liquid Fertilizer | Repayment: 4.5 bags/acre</li>
+                                <li><strong>Maize:</strong> 120 FCFA/kg</li>
+                                <li><strong>Soybean:</strong> 400 FCFA/kg</li>
+                                <li><strong>Rice:</strong> 300 FCFA/kg</li>
+                                <li><strong>Sorghum:</strong> 400 FCFA/kg</li>
                             </ul>
                             <p className="mt-3 text-sm text-slate-600">
-                                All bags are standardized at 100kg. Total repayment is calculated as: <strong>Bags per Acre × Total Acres</strong>.
+                                All bags are standardized at 100kg. Total repayment is calculated as: <strong>(Total Input Value / Fixed Crop Price per kg) / 100</strong>.
                             </p>
                         </section>
 
@@ -96,7 +96,7 @@ export default function ContractTermsPage() {
                         <section>
                             <h2 className="text-xl font-bold text-slate-800 mb-3">6. Crop Failure & Force Majeure</h2>
                             <p className="mb-3">
-                                The Company recognizes that farming involves inherent risks. In cases of documented crop failure due to:
+                                The Company and the Borrower recognizes that farming involves inherent risks. In cases of documented crop failure due to:
                             </p>
                             <ul className="list-disc list-inside space-y-2 ml-4">
                                 <li>Natural disasters (floods, droughts, pests)</li>
@@ -118,9 +118,9 @@ export default function ContractTermsPage() {
 
                         {/* Section 7 */}
                         <section>
-                            <h2 className="text-xl font-bold text-slate-800 mb-3">7. Pricing & Market Rates</h2>
+                            <h2 className="text-xl font-bold text-slate-800 mb-3">7. Pricing & Calculations</h2>
                             <p>
-                                The produce repayment quantity is fixed at the time of contract signing. The Company assumes market price risk. Current market rates are used to determine the bag-to-value conversion, which includes a 20-30% premium to cover:
+                                The produce repayment quantity is strictly fixed at the time of contract signing using the dynamic calculation above. The Company assumes market price risk post-signing. The bag-to-value conversion includes built-in considerations to cover:
                             </p>
                             <ul className="list-disc list-inside space-y-2 ml-4 mt-2">
                                 <li>Logistics and transportation</li>
@@ -139,7 +139,8 @@ export default function ContractTermsPage() {
                             <ol className="list-decimal list-inside space-y-2 ml-4 mt-2">
                                 <li>Good-faith negotiation between parties</li>
                                 <li>Mediation by a neutral third party (if negotiation fails)</li>
-                                <li>Arbitration under the laws of Ghana (final resort)</li>
+                                <li>Arbitration under the laws of Ghana and Cameroon</li>
+                                <li> (final resort)</li>
                             </ol>
                         </section>
 
@@ -163,7 +164,7 @@ export default function ContractTermsPage() {
                         <section>
                             <h2 className="text-xl font-bold text-slate-800 mb-3">10. Legal Jurisdiction</h2>
                             <p>
-                                This agreement is governed by the laws of the Republic of Ghana. Any legal proceedings shall be conducted in the courts of Ghana.
+                                This agreement is governed by the laws of the Republic of Cameroon and Ghana. Any legal proceedings shall be conducted in the courts of Ghana.
                             </p>
                         </section>
 
@@ -183,7 +184,7 @@ export default function ContractTermsPage() {
                     {/* Footer */}
                     <div className="mt-12 pt-8 border-t border-slate-200 text-center">
                         <p className="text-sm text-slate-500">
-                            For questions or clarifications, contact: <strong>support@agricheck.farm</strong>
+                            For questions or clarifications, contact: <strong>info@agricheck.farm</strong>
                         </p>
                         <Link href="/dashboard/inputs" className="inline-block mt-4 bg-emerald-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-emerald-700 transition-colors">
                             Return to Inputs

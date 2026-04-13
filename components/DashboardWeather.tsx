@@ -55,12 +55,12 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
   }
 
   return (
-    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100">
-      <h3 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 text-slate-800 flex items-center gap-2">
+    <div className="bg-white p-4 md:p-6 rounded-2xl shadow-sm border border-slate-100">
+      <h3 className="text-base md:text-xl font-bold mb-3 text-slate-800 flex items-center gap-2">
         <span>🌤️</span> Live 14-Day Farm Forecast
       </h3>
       
-      <div className="flex overflow-x-auto gap-3 sm:space-x-4 pb-3 sm:pb-4 snap-x snap-mandatory print:flex-wrap print:overflow-visible print:space-x-0 print:gap-4 print:justify-center [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex overflow-x-auto gap-3 pb-3 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
         {weatherData.map((day, index) => {
           let rawTime = (day as any).time || (day as any).date || (day as any).timestamp || '';
           let date: Date | null = null;
@@ -101,9 +101,9 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
           return (
             <div 
               key={index} 
-              className={`min-w-[110px] sm:min-w-[140px] p-3 sm:p-4 rounded-xl flex flex-col items-center snap-center shrink-0 transition-all print:border-slate-300 print:break-inside-avoid ${
-                isToday ? 'bg-emerald-50 border-emerald-200 shadow-sm print:bg-emerald-50/50' : 'bg-slate-50 border-transparent hover:bg-slate-100 print:bg-white'
-              } border`}
+              className={`flex-shrink-0 w-28 md:w-36 p-3 md:p-4 rounded-xl flex flex-col items-center snap-center border ${
+                isToday ? 'bg-emerald-50 border-emerald-200 shadow-sm' : 'bg-slate-50 border-transparent hover:bg-slate-100'
+              }`}
             >
               <div className="flex flex-col items-center text-center">
                 <span className={`font-bold ${isToday ? 'text-emerald-700' : 'text-slate-700'}`}>
@@ -114,7 +114,7 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
                 </span>
               </div>
               
-              <div className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-slate-800">
+              <div className="mt-2 text-2xl md:text-3xl font-bold text-slate-800">
                 {Math.round(day.temperature_max)}°
               </div>
               <div className="text-sm text-slate-500 mb-3">

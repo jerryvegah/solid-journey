@@ -17,14 +17,23 @@ import {
   serverTimestamp,
   Timestamp,
 } from 'firebase/firestore'
-import { db } from '@/lib/firebase'   // your existing firebase init
+import { db as _db } from '@/lib/firebase'
 import {
   FarmerProfile,
   FarmPlot,
   FarmContract,
   ContractStatus,
 } from '@/types/contract'
-import { generateContractNumber } from './contractEngine'
+
+// Assert db as non-null (will only be called when Firebase is initialized)
+const db = _db!
+
+// Inline utility — generates a contract number like CM-2026-001
+function generateContractNumber(countryCode: string, count: number): string {
+  const year = new Date().getFullYear()
+  const seq = String(count + 1).padStart(3, '0')
+  return `${countryCode.toUpperCase()}-${year}-${seq}`
+}
 
 // ─── READ: Farmer profile from /users/{uid} ───────────────────────────────────
 export async function getFarmerProfile(uid: string): Promise<FarmerProfile | null> {

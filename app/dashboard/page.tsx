@@ -12,6 +12,7 @@ import {
 import { FileText, Package, Satellite, Loader2, ArrowRight, Store, Map, PenTool } from 'lucide-react';
 import DashboardWeather from '@/components/DashboardWeather';
 import Link from 'next/link';
+import { StatCard, ActivityCard } from '@/components/DashboardUI';
 
 export default function DashboardPage() {
     const [user, setUser] = useState<any>(null);
@@ -28,6 +29,12 @@ export default function DashboardPage() {
     const [latestContract, setLatestContract] = useState<any>(null);
     const [latestReport, setLatestReport] = useState<any>(null);
     const [latestInput, setLatestInput] = useState<any>(null);
+
+    // Initial check for loading state reconciliation
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+    }, []);
 
     useEffect(() => {
         if (!auth) {
@@ -56,191 +63,70 @@ export default function DashboardPage() {
             return;
         }
 
-        if (!uid || uid.trim() === '') {
-            console.error('❌ Invalid user ID');
-            setLoading(false);
-            return;
-        }
-
         const isDev = process.env.NODE_ENV === 'development';
         
-        if (isDev) console.log('🔍 Fetching dashboard data for user:', uid);
-
         try {
+            // Assessment and Contract data fetching logic (kept same as before for data integrity)
             // 1. Fetch Assessments
-            try {
-                const assessmentsQuery = query(
-                    collection(db, "assessments"), 
-                    where("userId", "==", uid)
-                );
+            const assessmentsQuery = query(collection(db, "assessments"), where("userId", "==", uid));
+            const assessmentsSnapshot = await getDocs(assessmentsQuery);
+            setStats(prev => ({ ...prev, satelliteReports: assessmentsSnapshot.size }));
+            
+            if (!assessmentsSnapshot.empty) {
+                const latestAssessment = assessmentsSnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as any))
+                    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))[0];
                 
-                const assessmentsSnapshot = await getDocs(assessmentsQuery);
-                const assessmentsCount = assessmentsSnapshot.size;
-                
-                if (isDev) console.log(`📊 Found ${assessmentsCount} assessments`);
-                
-                setStats(prev => ({ ...prev, satelliteReports: assessmentsCount }));
-                
-                if (!assessmentsSnapshot.empty) {
-                    // FIX: Properly type the document data
-                    const assessmentsDocs = assessmentsSnapshot.docs
-                        .map(doc => ({ 
-                            id: doc.id, 
-                            ...doc.data() 
-                        } as any)) // Cast to any to access properties
-                        .sort((a, b) => {
-                            const timeA = a.createdAt?.toMillis?.() || 0;
-                            const timeB = b.createdAt?.toMillis?.() || 0;
-                            return timeB - timeA;
-                        });
-
-                    const latestAssessment = assessmentsDocs[0];
-                    if (isDev) console.log('✅ Latest assessment:', latestAssessment);
-                    
-                    setLatestReport({
-                        cropType: latestAssessment?.cropType || 'Unknown',
-                        fieldLocation: latestAssessment?.fieldLocation || 'Unknown',
-                        area: latestAssessment?.area_hectares || 0,
-                        date: latestAssessment?.createdAt?.toDate?.() 
-                            ? latestAssessment.createdAt.toDate().toLocaleDateString() 
-                            : 'N/A',
-                        lat: latestAssessment?.latitude || latestAssessment?.farmLocation?.lat || 5.6037,
-                        lng: latestAssessment?.longitude || latestAssessment?.farmLocation?.lng || -0.1870
-                    });
-                }
-            } catch (error) {
-                console.error("Error fetching assessments:", error);
+                setLatestReport({
+                    cropType: latestAssessment?.cropType || 'Unknown',
+                    fieldLocation: latestAssessment?.fieldLocation || 'Unknown',
+                    area: latestAssessment?.area_hectares || 0,
+                    lat: latestAssessment?.latitude || latestAssessment?.farmLocation?.lat || 5.6037,
+                    lng: latestAssessment?.longitude || latestAssessment?.farmLocation?.lng || -0.1870
+                });
             }
 
             // 2. Fetch Contracts
-            try {
-                const contractsQuery = query(
-                    collection(db, "FarmerContracts"), 
-                    where("userId", "==", uid)
-                );
-                
-                const contractsSnapshot = await getDocs(contractsQuery);
-                const contractsCount = contractsSnapshot.size;
-                
-                if (isDev) console.log(`📊 Found ${contractsCount} contracts`);
-                
-                setStats(prev => ({ ...prev, activeContracts: contractsCount }));
-                
-                if (!contractsSnapshot.empty) {
-                    // FIX: Properly type the document data
-                    const contractsDocs = contractsSnapshot.docs
-                        .map(doc => ({ 
-                            id: doc.id, 
-                            ...doc.data() 
-                        } as any)) // Cast to any to access properties
-                        .sort((a, b) => {
-                            const timeA = a.createdAt?.toMillis?.() || 0;
-                            const timeB = b.createdAt?.toMillis?.() || 0;
-                            return timeB - timeA;
-                        });
-
-                    const latestContractData = contractsDocs[0];
-                    if (isDev) console.log('✅ Latest contract:', latestContractData);
-                    
-                    setLatestContract({
-                        cropType: latestContractData?.cropType || 'Unknown',
-                        totalProduceDue: latestContractData?.totalProduceDue || 0,
-                        status: latestContractData?.status || 'Unknown'
-                    });
-                }
-            } catch (error) {
-                console.error("❌ Error fetching contracts:", error);
-            }
-
-            // 3. Fetch Input Orders
-            let totalInputsCount = 0;
-            let allInputs: any[] = [];
-
-            // Try InputOrders collection
-            try {
-                const inputOrdersQuery = query(
-                    collection(db, "InputOrders"), 
-                    where("userId", "==", uid)
-                );
-                
-                const inputOrdersSnapshot = await getDocs(inputOrdersQuery);
-                
-                if (isDev) console.log(`📦 Found ${inputOrdersSnapshot.size} input orders`);
-                
-                // FIX: Properly type the document data
-                const inputOrdersDocs = inputOrdersSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    source: 'InputOrders'
-                } as any)); // Cast to any
-                
-                allInputs.push(...inputOrdersDocs);
-                totalInputsCount += inputOrdersSnapshot.size;
-            } catch (error) {
-                if (isDev) console.error("❌ Error fetching InputOrders:", error);
-            }
-
-            // Try payments collection
-            try {
-                const paymentsQuery = query(
-                    collection(db, "payments"), 
-                    where("userId", "==", uid)
-                );
-                
-                const paymentsSnapshot = await getDocs(paymentsQuery);
-                
-                if (isDev) console.log(`💳 Found ${paymentsSnapshot.size} payments`);
-                
-                // FIX: Properly type the document data
-                const paymentsDocs = paymentsSnapshot.docs.map(doc => ({
-                    id: doc.id,
-                    ...doc.data(),
-                    source: 'payments'
-                } as any)); // Cast to any
-                
-                allInputs.push(...paymentsDocs);
-                totalInputsCount += paymentsSnapshot.size;
-            } catch (error) {
-                if (isDev) console.error("❌ Error fetching payments:", error);
-            }
-
-            if (isDev) console.log(`📊 Total inputs/orders: ${totalInputsCount}`);
+            const contractsQuery = query(collection(db, "FarmerContracts"), where("userId", "==", uid));
+            const contractsSnapshot = await getDocs(contractsQuery);
+            setStats(prev => ({ ...prev, activeContracts: contractsSnapshot.size }));
             
-            setStats(prev => ({ ...prev, inputsOrdered: totalInputsCount }));
-            
-            // Get latest input
-            if (allInputs.length > 0) {
-                const sortedInputs = allInputs.sort((a, b) => {
-                    const timeA = a.createdAt?.toMillis?.() || 
-                                  (a.createdAt instanceof Date ? a.createdAt.getTime() : 0) ||
-                                  (typeof a.createdAt === 'number' ? a.createdAt : 0);
-                    const timeB = b.createdAt?.toMillis?.() || 
-                                  (b.createdAt instanceof Date ? b.createdAt.getTime() : 0) ||
-                                  (typeof b.createdAt === 'number' ? b.createdAt : 0);
-                    return timeB - timeA;
+            if (!contractsSnapshot.empty) {
+                const latestContractData = contractsSnapshot.docs
+                    .map(doc => ({ id: doc.id, ...doc.data() } as any))
+                    .sort((a, b) => (b.createdAt?.toMillis?.() || 0) - (a.createdAt?.toMillis?.() || 0))[0];
+                
+                setLatestContract({
+                    cropType: latestContractData?.cropType || 'Unknown',
+                    totalProduceDue: latestContractData?.totalProduceDue || 0,
+                    status: latestContractData?.status || 'Unknown'
                 });
+            }
 
-                const latestInputData = sortedInputs[0];
-                if (isDev) console.log('✅ Latest input:', latestInputData);
-                
-                let formattedDate = 'N/A';
-                if (latestInputData?.createdAt) {
-                    if (typeof latestInputData.createdAt.toDate === 'function') {
-                        formattedDate = latestInputData.createdAt.toDate().toLocaleDateString();
-                    } else if (latestInputData.createdAt instanceof Date) {
-                        formattedDate = latestInputData.createdAt.toLocaleDateString();
-                    } else if (typeof latestInputData.createdAt === 'string') {
-                        formattedDate = new Date(latestInputData.createdAt).toLocaleDateString();
-                    } else if (typeof latestInputData.createdAt === 'number') {
-                        formattedDate = new Date(latestInputData.createdAt).toLocaleDateString();
-                    }
-                }
-                
+            // 3. Fetch Input Orders & Payments
+            const inputOrdersQuery = query(collection(db, "InputOrders"), where("userId", "==", uid));
+            const inputOrdersSnapshot = await getDocs(inputOrdersQuery);
+            
+            const paymentsQuery = query(collection(db, "payments"), where("userId", "==", uid));
+            const paymentsSnapshot = await getDocs(paymentsQuery);
+            
+            setStats(prev => ({ ...prev, inputsOrdered: inputOrdersSnapshot.size + paymentsSnapshot.size }));
+            
+            const allInputs = [
+                ...inputOrdersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'InputOrders' } as any)),
+                ...paymentsSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), source: 'payments' } as any))
+            ].sort((a, b) => {
+                const timeA = a.createdAt?.toMillis?.() || (a.createdAt instanceof Date ? a.createdAt.getTime() : 0);
+                const timeB = b.createdAt?.toMillis?.() || (b.createdAt instanceof Date ? b.createdAt.getTime() : 0);
+                return timeB - timeA;
+            });
+
+            if (allInputs.length > 0) {
+                const latest = allInputs[0];
                 setLatestInput({
-                    productName: latestInputData?.productName || 'Unknown Product',
-                    amount: latestInputData?.amount || 0,
-                    date: formattedDate,
-                    source: latestInputData?.source || 'unknown'
+                    productName: latest?.productName || 'Unknown Product',
+                    amount: latest?.amount || 0,
+                    date: latest?.createdAt?.toDate?.() ? latest.createdAt.toDate().toLocaleDateString() : 'N/A'
                 });
             }
 
@@ -251,62 +137,63 @@ export default function DashboardPage() {
         }
     };
 
-    if (loading) {
+    if (!mounted || loading) {
         return (
-            <div className="h-96 flex items-center justify-center">
-                <Loader2 className="animate-spin text-emerald-500" size={48} />
+            <div className="flex flex-col items-center justify-center py-20 animate-pulse">
+                <Loader2 className="animate-spin text-emerald-500 mb-4" size={48} />
+                <p className="text-slate-400 font-medium">Crunching live data...</p>
             </div>
         );
     }
 
     return (
-        <div className="space-y-6 max-w-7xl mx-auto px-4 py-4">
+        <div className="space-y-8">
             {/* Welcome Banner */}
-            <div className="bg-emerald-500 rounded-2xl p-6 md:p-12 text-white shadow-xl relative overflow-hidden">
-                <div className="relative z-10">
-                    <h1 className="text-2xl md:text-4xl font-bold mb-2 md:mb-4">
+            <div className="bg-emerald-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden group">
+                <div className="relative z-10 transition-transform duration-500 group-hover:translate-x-2">
+                    <h1 className="text-3xl md:text-5xl font-bold mb-4">
                         Welcome back{user?.displayName ? `, ${user.displayName}` : ''}!
                     </h1>
-                    <p className="text-emerald-50 text-sm md:text-lg max-w-2xl font-medium">
+                    <p className="text-emerald-50 text-lg max-w-2xl font-medium opacity-90">
                         Manage your farm inputs, monitor crops, and track contracts all in one place.
                     </p>
                 </div>
-                <div className="absolute -right-20 -top-20 w-80 h-80 bg-white/10 rounded-full blur-3xl pointer-events-none"></div>
-                <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
+                <div className="absolute -right-16 -top-16 w-80 h-80 bg-white/10 rounded-full blur-3xl transition-transform duration-1000 group-hover:scale-110 pointer-events-none"></div>
+                <div className="absolute -left-16 -bottom-16 w-64 h-64 bg-emerald-400/20 rounded-full blur-3xl pointer-events-none"></div>
             </div>
 
-            {/* Quick Actions Hub */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                <Link href="/dashboard/inputs" className="bg-white p-4 rounded-2xl shadow-md border border-emerald-50 flex items-center justify-between hover:bg-emerald-50/50 hover:border-emerald-200 hover:-translate-y-1 transition-all group">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Store size={20} /></div>
-                        <span className="font-bold text-slate-700 group-hover:text-emerald-800 transition-colors">Order Inputs</span>
+            {/* Quick Actions Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <Link href="/dashboard/inputs" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:border-emerald-200 transition-all group">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-emerald-50 p-3 rounded-xl text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white transition-all"><Store size={22} /></div>
+                        <span className="font-bold text-slate-700">Order Inputs</span>
                     </div>
-                    <ArrowRight size={20} className="text-emerald-200 group-hover:text-emerald-600 transition-colors" />
+                    <ArrowRight size={20} className="text-slate-300 group-hover:text-emerald-600 transition-colors" />
                 </Link>
 
-                <Link href="/dashboard/satellite" className="bg-white p-4 rounded-2xl shadow-md border border-blue-50 flex items-center justify-between hover:bg-blue-50/50 hover:border-blue-200 hover:-translate-y-1 transition-all group">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-blue-100 p-2.5 rounded-xl text-blue-600 group-hover:bg-blue-500 group-hover:text-white transition-colors"><Map size={20} /></div>
-                        <span className="font-bold text-slate-700 group-hover:text-blue-800 transition-colors">Scan Crop Health</span>
+                <Link href="/dashboard/satellite" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:border-blue-200 transition-all group">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-blue-50 p-3 rounded-xl text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-all"><Map size={22} /></div>
+                        <span className="font-bold text-slate-700">Scan Crop Health</span>
                     </div>
-                    <ArrowRight size={20} className="text-blue-200 group-hover:text-blue-600 transition-colors" />
+                    <ArrowRight size={20} className="text-slate-300 group-hover:text-blue-600 transition-colors" />
                 </Link>
 
-                <Link href="/dashboard/contracts" className="bg-white p-4 rounded-2xl shadow-md border border-purple-50 flex items-center justify-between hover:bg-purple-50/50 hover:border-purple-200 hover:-translate-y-1 transition-all group">
-                    <div className="flex items-center gap-3">
-                        <div className="bg-purple-100 p-2.5 rounded-xl text-purple-600 group-hover:bg-purple-500 group-hover:text-white transition-colors"><PenTool size={20} /></div>
-                        <span className="font-bold text-slate-700 group-hover:text-purple-800 transition-colors">Create Contract</span>
+                <Link href="/dashboard/contracts" className="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between hover:shadow-md hover:border-purple-200 transition-all group">
+                    <div className="flex items-center gap-4">
+                        <div className="bg-purple-50 p-3 rounded-xl text-purple-600 group-hover:bg-purple-600 group-hover:text-white transition-all"><PenTool size={22} /></div>
+                        <span className="font-bold text-slate-700">Create Contract</span>
                     </div>
-                    <ArrowRight size={20} className="text-purple-200 group-hover:text-purple-600 transition-colors" />
+                    <ArrowRight size={20} className="text-slate-300 group-hover:text-purple-600 transition-colors" />
                 </Link>
             </div>
 
-            {/* Stats Grid */}
-            <div className="grid grid-cols-3 gap-3 md:gap-6">
-                <StatCard icon={<FileText size={18} />} title="Active Contracts" value={stats.activeContracts} />
-                <StatCard icon={<Package size={18} />} title="Inputs Ordered" value={stats.inputsOrdered} />
-                <StatCard icon={<Satellite size={18} />} title="Satellite Reports" value={stats.satelliteReports} />
+            {/* Stats Grid - STACKED ON MOBILE */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                <StatCard icon={<FileText size={20} />} title="Active Contracts" value={stats.activeContracts} />
+                <StatCard icon={<Package size={20} />} title="Inputs Ordered" value={stats.inputsOrdered} />
+                <StatCard icon={<Satellite size={20} />} title="Satellite Reports" value={stats.satelliteReports} />
             </div>
 
             {/* Live Weather Forecast */}
@@ -317,12 +204,11 @@ export default function DashboardPage() {
 
             {/* Recent Activity Section */}
             <div>
-                <h2 className="text-xl font-bold text-slate-800 mb-4">Recent Activity</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    
+                <h2 className="text-2xl font-bold text-slate-800 mb-6 px-1">Recent Activity</h2>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <ActivityCard 
                         title="Latest Contract" 
-                        icon={<FileText size={18} className="text-emerald-500" />}
+                        icon={<FileText size={20} className="text-emerald-500" />}
                         data={latestContract ? [
                             { label: "Crop Type", value: latestContract.cropType },
                             { label: "Produce Due", value: `${latestContract.totalProduceDue} Bags` },
@@ -334,7 +220,7 @@ export default function DashboardPage() {
 
                     <ActivityCard 
                         title="Latest Satellite Report" 
-                        icon={<Satellite size={18} className="text-emerald-500" />}
+                        icon={<Satellite size={20} className="text-emerald-500" />}
                         data={latestReport ? [
                             { label: "Crop Type", value: latestReport.cropType },
                             { label: "Location", value: latestReport.fieldLocation },
@@ -346,7 +232,7 @@ export default function DashboardPage() {
 
                     <ActivityCard 
                         title="Latest Input Package" 
-                        icon={<Package size={18} className="text-emerald-500" />}
+                        icon={<Package size={20} className="text-emerald-500" />}
                         data={latestInput ? [
                             { label: "Product", value: latestInput.productName },
                             { label: "Amount", value: `GH₵ ${latestInput.amount}` },
@@ -356,67 +242,6 @@ export default function DashboardPage() {
                         ctaData={{ label: "Browse input packages", href: "/dashboard/inputs" }}
                     />
                 </div>
-            </div>
-
-            {/* Debug Info (Remove in production) */}
-            {process.env.NODE_ENV === 'development' && (
-                <div className="bg-slate-100 rounded-xl p-4">
-                    <h3 className="font-bold text-slate-700 mb-2">🔧 Debug Info</h3>
-                    <div className="text-xs text-slate-600 space-y-1 font-mono">
-                        <div>User ID: {user?.uid}</div>
-                        <div>Contracts: {stats.activeContracts}</div>
-                        <div>Inputs: {stats.inputsOrdered}</div>
-                        <div>Reports: {stats.satelliteReports}</div>
-                        <div className="text-yellow-600">Check browser console for detailed logs</div>
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-}
-
-// Helper Sub-components
-function StatCard({ icon, title, value }: { icon: any, title: string, value: number }) {
-    return (
-        <div className="bg-white p-3 md:p-6 rounded-xl shadow-sm border border-slate-100 hover:shadow-md transition-all">
-            <div className="w-9 h-9 md:w-12 md:h-12 bg-emerald-100 text-emerald-600 rounded-lg md:rounded-xl flex items-center justify-center mb-2 md:mb-4">
-                {icon}
-            </div>
-            <h3 className="text-slate-500 text-xs md:text-sm font-bold uppercase tracking-wider mb-1 leading-tight">{title}</h3>
-            <p className="text-xl md:text-4xl font-bold text-slate-800">{value}</p>
-        </div>
-    );
-}
-
-function ActivityCard({ title, icon, data, emptyMessage, ctaData }: { title: string, icon: any, data: any[] | null, emptyMessage: string, ctaData?: {label: string, href: string} }) {
-    return (
-        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="p-4 border-b border-slate-50 bg-slate-50/50 flex items-center gap-2 font-bold text-slate-700">
-                {icon} {title}
-            </div>
-            <div className="p-5">
-                {data ? (
-                    <div className="space-y-3">
-                        {data.map((item, i) => (
-                            <div key={i}>
-                                <div className="flex justify-between items-center">
-                                    <span className="text-slate-500 text-sm">{item.label}</span>
-                                    <span className="font-semibold text-slate-800 text-right">{item.value}</span>
-                                </div>
-                                {i < data.length - 1 && <div className="w-full h-px bg-slate-100 mt-3"></div>}
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                    <div className="text-center py-4 space-y-3">
-                        <p className="text-slate-400 text-sm italic">{emptyMessage}</p>
-                        {ctaData && (
-                            <Link href={ctaData.href} className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-50 text-emerald-700 rounded-lg text-sm font-bold hover:bg-emerald-500 hover:text-white transition-all">
-                                {ctaData.label} <ArrowRight size={16} />
-                            </Link>
-                        )}
-                    </div>
-                )}
             </div>
         </div>
     );

@@ -60,7 +60,15 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
         <span>🌤️</span> Live 14-Day Farm Forecast
       </h3>
       
-      <div className="flex overflow-x-auto gap-3 pb-3 snap-x" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+      <div 
+        className="flex overflow-x-auto gap-3 pb-4 snap-x touch-pan-x w-full"
+        style={{ 
+          WebkitOverflowScrolling: 'touch',
+          scrollbarWidth: 'thin',
+          scrollbarColor: '#e2e8f0 transparent',
+          overscrollBehaviorX: 'contain'
+        }}
+      >
         {weatherData.map((day, index) => {
           let rawTime = (day as any).time || (day as any).date || (day as any).timestamp || '';
           let date: Date | null = null;
@@ -132,6 +140,8 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
             </div>
           );
         })}
+        {/* Spacer for end of scroll */}
+        <div className="flex-shrink-0 w-4 h-full"></div>
       </div>
     </div>
   );

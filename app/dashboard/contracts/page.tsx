@@ -6,6 +6,7 @@ import { db, useAuth } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import { Calendar, FileText, MapPin, Package, X } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
+import { PageHeader } from '@/components/DashboardUI';
 
 export default function ContractsPage() {
     const { user, loading: authLoading } = useAuth();
@@ -168,15 +169,11 @@ export default function ContractsPage() {
 
     return (
         <div className="max-w-7xl mx-auto px-4 relative pb-20">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-                <div>
-                    <h1 className="text-2xl sm:text-3xl font-bold text-slate-800">Farmer Contracts</h1>
-                    <p className="text-slate-500 mt-1">Review your Buy Now Pay Later agreements and payment schedules.</p>
-                </div>
-                <div className="bg-emerald-100 text-emerald-800 px-4 py-2 rounded-full text-sm font-bold shadow-sm whitespace-nowrap">
-                    {contracts.length} Active Contract{contracts.length !== 1 ? 's' : ''}
-                </div>
-            </div>
+            <PageHeader 
+                title="Farmer Contracts" 
+                description="Review your Buy Now Pay Later agreements and payment schedules."
+                badge={`${contracts.length} Active Contract${contracts.length !== 1 ? 's' : ''}`}
+            />
 
             {contracts.length === 0 ? (
                 <div className="bg-white rounded-2xl shadow-md p-8 sm:p-12 text-center border border-slate-100">

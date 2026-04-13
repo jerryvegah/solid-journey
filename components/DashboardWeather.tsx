@@ -47,7 +47,7 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
   }, [latitude, longitude, asl]);
 
   if (isLoading) {
-    return <div className="p-4 rounded-xl bg-slate-50 animate-pulse border border-slate-100 hidden md:block">Loading live 14-day weather...</div>;
+    return <div className="p-4 rounded-xl bg-slate-50 animate-pulse border border-slate-100">Loading live 14-day weather...</div>;
   }
 
   if (error) {
@@ -55,12 +55,12 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
   }
 
   return (
-    <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100">
-      <h3 className="text-xl font-bold mb-4 text-slate-800 flex items-center gap-2">
+    <div className="bg-white p-4 sm:p-6 rounded-2xl shadow-sm border border-slate-100">
+      <h3 className="text-base sm:text-xl font-bold mb-3 sm:mb-4 text-slate-800 flex items-center gap-2">
         <span>🌤️</span> Live 14-Day Farm Forecast
       </h3>
       
-      <div className="flex overflow-x-auto space-x-4 pb-4 snap-x print:flex-wrap print:overflow-visible print:space-x-0 print:gap-4 print:justify-center [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
+      <div className="flex overflow-x-auto gap-3 sm:space-x-4 pb-3 sm:pb-4 snap-x snap-mandatory print:flex-wrap print:overflow-visible print:space-x-0 print:gap-4 print:justify-center [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {weatherData.map((day, index) => {
           let rawTime = (day as any).time || (day as any).date || (day as any).timestamp || '';
           let date: Date | null = null;
@@ -101,7 +101,7 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
           return (
             <div 
               key={index} 
-              className={`min-w-[140px] p-4 rounded-xl flex flex-col items-center snap-center transition-all print:border-slate-300 print:break-inside-avoid ${
+              className={`min-w-[110px] sm:min-w-[140px] p-3 sm:p-4 rounded-xl flex flex-col items-center snap-center shrink-0 transition-all print:border-slate-300 print:break-inside-avoid ${
                 isToday ? 'bg-emerald-50 border-emerald-200 shadow-sm print:bg-emerald-50/50' : 'bg-slate-50 border-transparent hover:bg-slate-100 print:bg-white'
               } border`}
             >
@@ -114,7 +114,7 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
                 </span>
               </div>
               
-              <div className="mt-3 text-3xl font-bold text-slate-800">
+              <div className="mt-2 sm:mt-3 text-2xl sm:text-3xl font-bold text-slate-800">
                 {Math.round(day.temperature_max)}°
               </div>
               <div className="text-sm text-slate-500 mb-3">

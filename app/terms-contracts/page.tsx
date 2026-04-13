@@ -5,15 +5,15 @@ import Link from 'next/link';
 
 export default function ContractTermsPage() {
     return (
-        <div className="min-h-screen bg-slate-50 py-12">
+        <div className="min-h-screen bg-slate-50 py-6 sm:py-12">
             <div className="max-w-4xl mx-auto px-4">
                 <Link href="/dashboard/inputs" className="inline-flex items-center gap-2 text-emerald-600 hover:text-emerald-700 font-bold mb-6">
                     <ArrowLeft size={20} />
                     Back to Inputs
                 </Link>
 
-                <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-8 md:p-12">
-                    <h1 className="text-3xl font-bold text-slate-800 mb-2">Buy Now Pay Later (BNPL) Terms & Conditions</h1>
+                <div className="bg-white rounded-2xl shadow-lg border border-slate-200 p-5 sm:p-8 md:p-12">
+                    <h1 className="text-xl sm:text-3xl font-bold text-slate-800 mb-2">Buy Now Pay Later (BNPL) Terms & Conditions</h1>
                     <p className="text-slate-500 mb-8">Effective Date: February 2026</p>
 
                     <div className="space-y-8 text-slate-700 leading-relaxed">

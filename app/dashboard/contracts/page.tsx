@@ -237,10 +237,10 @@ export default function ContractsPage() {
             {/* Contract Details Modal */}
             {selectedContract && (
                 <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm" onClick={() => setSelectedContract(null)}>
-                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
-                        <div className="p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
+                    <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto mx-2" onClick={e => e.stopPropagation()}>
+                        <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-start sticky top-0 bg-white z-10">
                             <div>
-                                <h2 className="text-2xl font-bold text-slate-800">Contract Details</h2>
+                                <h2 className="text-xl sm:text-2xl font-bold text-slate-800">Contract Details</h2>
                                 <p className="text-slate-500 text-sm mt-1">
                                     {selectedContract.productName ? selectedContract.productName : (selectedPackage?.packageName || 'Buy Now Pay Later Contract')}
                                 </p>
@@ -250,7 +250,7 @@ export default function ContractsPage() {
                             </button>
                         </div>
 
-                        <div className="p-6 space-y-6">
+                        <div className="p-4 sm:p-6 space-y-5 sm:space-y-6">
                             {/* Status Banner */}
                             <div className={`rounded-xl p-4 border-2 ${selectedContract.status === 'Active' ? 'bg-emerald-50 border-emerald-200' :
                                 selectedContract.status === 'Pending' ? 'bg-yellow-50 border-yellow-200' :
@@ -277,12 +277,13 @@ export default function ContractsPage() {
                                     <MapPin size={18} className="text-emerald-600" />
                                     Farm Boundary
                                 </h3>
-                                <div className="h-64 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
+                                <div className="h-48 sm:h-64 rounded-xl overflow-hidden border border-slate-200 bg-slate-100">
                                     <div ref={mapRef} className="w-full h-full" />
                                 </div>
-                                <p className="text-sm text-slate-500 mt-2">
-                                    <strong>Location:</strong> {selectedContract.fieldLocation} | <strong>Total Acres:</strong> {selectedContract.totalAcres}
-                                </p>
+                                <div className="text-sm text-slate-500 mt-2 space-y-0.5 sm:space-y-0">
+                                    <p><strong>Location:</strong> {selectedContract.fieldLocation}</p>
+                                    <p><strong>Total Acres:</strong> {selectedContract.totalAcres}</p>
+                                </div>
                             </div>
 
                             {/* Contract Terms */}
@@ -291,28 +292,28 @@ export default function ContractsPage() {
                                     <FileText size={18} className="text-emerald-600" />
                                     Contract Terms
                                 </h3>
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                                    <div className="bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Crop Type</p>
-                                        <p className="text-lg font-bold text-slate-800">{selectedContract.cropType}</p>
+                                        <p className="text-sm sm:text-lg font-bold text-slate-800">{selectedContract.cropType}</p>
                                     </div>
-                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                    <div className="bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Input Value</p>
-                                        <p className="text-lg font-bold text-slate-800">
+                                        <p className="text-sm sm:text-lg font-bold text-slate-800">
                                             {selectedContract.productName && selectedContract.unitPrice && selectedContract.quantity 
                                                 ? formatPrice(selectedContract.unitPrice * selectedContract.quantity, userCurrency)
                                                 : (selectedPackage ? formatPrice(selectedPackage.totalInputValue, userCurrency) : 'N/A')}
                                         </p>
                                     </div>
-                                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200">
+                                    <div className="bg-slate-50 rounded-xl p-3 sm:p-4 border border-slate-200">
                                         <p className="text-xs font-bold text-slate-500 uppercase mb-1">Repayment Mode</p>
-                                        <p className="text-lg font-bold text-slate-800">
+                                        <p className="text-sm sm:text-lg font-bold text-slate-800 break-words">
                                             {selectedContract.productName ? 'Dynamic (Farmgate Price)' : (selectedPackage ? `${selectedPackage.produceRepaymentPerAcre} bags/acre` : 'Dynamic')}
                                         </p>
                                     </div>
-                                    <div className="bg-emerald-50 rounded-xl p-4 border-2 border-emerald-200">
+                                    <div className="bg-emerald-50 rounded-xl p-3 sm:p-4 border-2 border-emerald-200">
                                         <p className="text-xs font-bold text-emerald-600 uppercase mb-1">Total Produce Due</p>
-                                        <p className="text-lg font-bold text-emerald-700">{selectedContract.totalProduceDue} bags</p>
+                                        <p className="text-sm sm:text-lg font-bold text-emerald-700">{selectedContract.totalProduceDue} bags</p>
                                     </div>
                                 </div>
                             </div>

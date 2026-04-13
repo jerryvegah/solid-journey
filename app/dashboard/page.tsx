@@ -260,14 +260,14 @@ export default function DashboardPage() {
     }
 
     return (
-        <div className="space-y-8 max-w-7xl mx-auto p-4">
+        <div className="space-y-6 md:space-y-8 max-w-7xl mx-auto px-3 sm:px-4 py-4">
             {/* Welcome Banner */}
-            <div className="bg-emerald-500 rounded-3xl p-8 md:p-12 text-white shadow-xl relative overflow-hidden transition-all hover:shadow-2xl">
+            <div className="bg-emerald-500 rounded-2xl md:rounded-3xl p-6 sm:p-8 md:p-12 text-white shadow-xl relative overflow-hidden transition-all hover:shadow-2xl">
                 <div className="relative z-10">
-                    <h1 className="text-3xl md:text-4xl font-bold mb-4 drop-shadow-sm">
+                    <h1 className="text-2xl sm:text-3xl md:text-4xl font-bold mb-2 sm:mb-4 drop-shadow-sm">
                         Welcome back{user?.displayName ? `, ${user.displayName}` : ''}!
                     </h1>
-                    <p className="text-emerald-50 text-lg max-w-2xl font-medium">
+                    <p className="text-emerald-50 text-sm sm:text-lg max-w-2xl font-medium">
                         Manage your farm inputs, monitor crops, and track contracts all in one place.
                     </p>
                 </div>
@@ -276,7 +276,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Quick Actions Hub */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 -mt-4 relative z-20 mx-2 md:mx-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4 -mt-2 sm:-mt-4 relative z-20 mx-0 md:mx-6">
                 <Link href="/dashboard/inputs" className="bg-white p-4 rounded-2xl shadow-md border border-emerald-50 flex items-center justify-between hover:bg-emerald-50/50 hover:border-emerald-200 hover:-translate-y-1 transition-all group">
                     <div className="flex items-center gap-3">
                         <div className="bg-emerald-100 p-2.5 rounded-xl text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition-colors"><Store size={20} /></div>
@@ -303,7 +303,7 @@ export default function DashboardPage() {
             </div>
 
             {/* Stats Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-3 gap-3 sm:gap-6">
                 <StatCard icon={<FileText />} title="Active Contracts" value={stats.activeContracts} />
                 <StatCard icon={<Package />} title="Inputs Ordered" value={stats.inputsOrdered} />
                 <StatCard icon={<Satellite />} title="Satellite Reports" value={stats.satelliteReports} />
@@ -320,7 +320,7 @@ export default function DashboardPage() {
             {/* Recent Activity Section */}
             <div className="mt-8">
                 <h2 className="text-xl font-bold text-slate-800 mb-6">Recent Activity</h2>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
                     
                     {/* Latest Contract Card */}
                     <ActivityCard 
@@ -383,14 +383,14 @@ export default function DashboardPage() {
 // Helper Sub-components
 function StatCard({ icon, title, value }: { icon: any, title: string, value: number }) {
     return (
-        <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 hover:border-emerald-100 group relative overflow-hidden">
+        <div className="bg-white p-3 sm:p-6 rounded-xl sm:rounded-2xl shadow-sm border border-slate-100 transition-all duration-300 hover:shadow-xl hover:-translate-y-1.5 hover:border-emerald-100 group relative overflow-hidden">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-emerald-50 rounded-full blur-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
             <div className="relative z-10">
-                <div className="w-12 h-12 bg-slate-50 text-slate-500 rounded-xl flex items-center justify-center mb-4 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors duration-300">
+                <div className="w-8 h-8 sm:w-12 sm:h-12 bg-slate-50 text-slate-500 rounded-lg sm:rounded-xl flex items-center justify-center mb-2 sm:mb-4 group-hover:bg-emerald-100 group-hover:text-emerald-600 transition-colors duration-300 [&>svg]:w-4 [&>svg]:h-4 sm:[&>svg]:w-6 sm:[&>svg]:h-6">
                     {icon}
                 </div>
-                <h3 className="text-slate-500 text-sm font-bold uppercase tracking-wider mb-1 group-hover:text-emerald-700 transition-colors">{title}</h3>
-                <p className="text-4xl font-bold text-slate-800 group-hover:scale-105 origin-left transition-transform duration-300 flex items-center gap-2">
+                <h3 className="text-slate-500 text-[10px] sm:text-sm font-bold uppercase tracking-wider mb-0.5 sm:mb-1 group-hover:text-emerald-700 transition-colors leading-tight">{title}</h3>
+                <p className="text-2xl sm:text-4xl font-bold text-slate-800 group-hover:scale-105 origin-left transition-transform duration-300">
                     {value} 
                 </p>
             </div>

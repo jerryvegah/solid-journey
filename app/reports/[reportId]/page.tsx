@@ -220,6 +220,7 @@ export default function FullReportPage() {
                     guidance,
 
                     satellite_monitoring_enabled: d.satellite_monitoring_enabled || false,
+                    monitoringHistory: d.monitoring_history || [],
                     poly_id:  satOuter.poly_id,
                     field_id: satOuter.field_id,
                 });
@@ -387,6 +388,7 @@ export default function FullReportPage() {
                                 acquisitionDate={report.ndviDate}
                                 bbox={report.bbox}
                                 fieldCoordinates={report.fieldCoordinates}
+                                history={report.monitoringHistory}
                             />
                         )}
 

@@ -184,7 +184,7 @@ export default function FullReportPage() {
                     fieldCoordinates: d.fieldCoordinates,
 
                     // Intelligence-derived fields
-                    stage:              intel.stage || 'Unknown',
+                    stage:              intel.stage || riskAssess.growth_stage || 'Unknown',
                     daysAfterPlanting:  intel.days_after_planting ?? 0,
                     expectedSeason:     120,  // default; could store in intel if needed
                     signals,
@@ -218,6 +218,11 @@ export default function FullReportPage() {
 
                     // AI guidance (built above from intelligence)
                     guidance,
+
+                    // Yield data
+                    predictedYield:     riskAssess.predicted_yield?.predicted_yield_mt || null,
+                    yieldPerHa:         riskAssess.predicted_yield?.yield_per_ha || null,
+                    farmClassification: riskAssess.predicted_yield?.farm_classification || null,
 
                     satellite_monitoring_enabled: d.satellite_monitoring_enabled || false,
                     monitoringHistory: d.monitoring_history || [],
@@ -369,7 +374,7 @@ export default function FullReportPage() {
                                 {[
                                     ['Total Area', report.area],
                                     ['Analysis Type', 'Field Boundary'],
-                                    ['Monitoring', report.satellite_monitoring_enabled ? 'Satellite' : 'Manual'],
+                                    ['Predicted Yield', report.predictedYield != null ? `${report.predictedYield} MT` : 'N/A'],
                                     ['Data Quality', report.dataQuality != null ? `${report.dataQuality}%` : 'N/A'],
                                 ].map(([label, value]) => (
                                     <div key={label} className="space-y-1">
@@ -503,6 +508,7 @@ export default function FullReportPage() {
                                     ['Growth stage',       report.stage || 'Unknown'],
                                     ['Days after planting', formatDAS(report.daysAfterPlanting)],
                                     ['Cycle remaining',    `${remainingDays} days`],
+                                    ['Predicted Yield',    report.predictedYield != null ? `${report.predictedYield} MT` : 'N/A'],
                                     ['Mean NDVI',          report.meanNDVI != null ? report.meanNDVI.toFixed(4) : 'N/A'],
                                 ].map(([label, value]) => (
                                     <div key={label} className="flex justify-between items-center border-b border-emerald-800 pb-4 last:border-0">

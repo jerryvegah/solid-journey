@@ -15,7 +15,7 @@ const translations: Record<string, TranslationKeys> = {
     nav_packages: "Input Packages",
     nav_signin: "Sign In",
     hero_title: "Grow crops Smarter, Not Harder",
-    hero_subtitle: "Remotely map and monitor your farm, get instant climate assessments, and access tailored input packages with flexible financing options.",
+    hero_subtitle: "Remotely map and monitor your farm, get instant climate risk assessments, and access tailored input packages with flexible financing options.",
     hero_cta_primary: "Get Started",
     hero_cta_secondary: "How It Works",
     audience_title: "Who We Serve",

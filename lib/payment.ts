@@ -10,8 +10,8 @@ interface CurrencyConfig {
 const CONFIG = {
     publicKey: "FLWPUBK-3ef67085c05081c07f7de945fa0fa40c-X", // Live Key from your snippet
     currencies: {
-        'GHS': { amount: '35', paymentOptions: 'card,mobilemoneyghana', country: 'Ghana' },
-        'XAF': { amount: '1500', paymentOptions: 'card,mobilemoneyfranco', country: 'Cameroon' }
+        'GHS': { amount: '100', paymentOptions: 'card,mobilemoneyghana', country: 'Ghana' },
+        'XAF': { amount: '5000', paymentOptions: 'card,mobilemoneyfranco', country: 'Cameroon' }
     }
 };
 

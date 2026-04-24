@@ -114,11 +114,14 @@ export default function SatelliteReportsPage() {
                         monitoringType: data.satellite_monitoring_enabled ? "Satellite Monitoring" : "Manual Assessment",
                         plantedDate: data.datePlanted || "N/A",
                         // FIX: Pull REAL data from Firebase
-                        stage: cropInfo.current_stage?.replace('_', ' ') || "Unknown",
+                        stage: cropInfo.current_stage?.replace('_', ' ') || riskAssessment.growth_stage || "Unknown",
                         daysAfterPlanting: cropInfo.current_das || (data.datePlanted ? Math.floor((new Date().getTime() - new Date(data.datePlanted).getTime()) / (1000 * 60 * 60 * 24)) : 0),
                         expectedSeason: cropInfo.expected_season_length || 120,
                         peakNDVI: cropInfo.expected_peak_ndvi?.toFixed(2) || "0.75",
                         riskLevel: riskAssessment.risk_level || "Unknown",
+                        predictedYield: riskAssessment.predicted_yield?.predicted_yield_mt || null,
+                        yieldPerHa: riskAssessment.predicted_yield?.yield_per_ha || null,
+                        farmClassification: riskAssessment.predicted_yield?.farm_classification || null,
                         boundaryPoints: data.fieldCoordinates ? JSON.parse(data.fieldCoordinates).length : 0,
                         fieldCoordinates: data.fieldCoordinates,
                         results: data.results || {}
@@ -316,6 +319,17 @@ function ReportCard({ report, onSelect }: { report: any, onSelect: () => void })
                                 <span className="text-slate-500">Expected Season</span>
                                 <span className="font-semibold text-slate-700">{report.expectedSeason} days</span>
                             </div>
+                            {report.predictedYield !== null && (
+                                <div className="mt-4 pt-4 border-t border-emerald-100 bg-emerald-50/50 p-3 rounded-lg">
+                                    <div className="flex justify-between items-center">
+                                        <span className="text-emerald-800 font-bold text-xs uppercase">Predicted Yield</span>
+                                        <span className="text-emerald-900 font-black text-lg">{report.predictedYield} MT</span>
+                                    </div>
+                                    <p className="text-[10px] text-emerald-600 font-bold mt-1 uppercase tracking-wider">
+                                        {report.farmClassification} • {report.yieldPerHa} MT/Ha
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -500,6 +514,20 @@ function ReportDetailsModal({ report, onClose, onViewFull }: { report: any, onCl
                                 <p className="text-xs font-bold text-slate-500 uppercase">Risk Level</p>
                                 <p className={`text-base sm:text-xl font-bold ${report.riskLevel.includes('Low') ? 'text-emerald-500' : 'text-yellow-600'}`}>{report.riskLevel}</p>
                             </div>
+                            {report.predictedYield !== null && (
+                                <div className="bg-emerald-50 p-3 sm:p-4 rounded-xl border border-emerald-100 col-span-2">
+                                    <div className="flex justify-between items-center">
+                                        <div>
+                                            <p className="text-xs font-bold text-emerald-600 uppercase">Predicted Total Yield</p>
+                                            <p className="text-2xl sm:text-3xl font-black text-emerald-900">{report.predictedYield} MT</p>
+                                        </div>
+                                        <div className="text-right">
+                                            <p className="text-xs font-bold text-emerald-600 uppercase">Yield per Hectare</p>
+                                            <p className="text-lg sm:text-xl font-bold text-emerald-800">{report.yieldPerHa} MT/Ha</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     </div>
 

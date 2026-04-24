@@ -410,7 +410,11 @@ export default function MapPage() {
                 latitude: fieldData.center.lat,
                 longitude: fieldData.center.lng,
                 crop_type: boundaryCropType.toLowerCase(),
-                elevation: 1200
+                elevation: 1200,
+                area_hectares: fieldData.hectares,
+                datePlanted: datePlanted,
+                fieldLocation: boundaryDescription,
+                fieldCoordinates: fieldData.coordinates
             };
 
             const boundaryPayload = {

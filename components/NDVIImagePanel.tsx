@@ -169,7 +169,7 @@ export default function NDVIImagePanel({
             {/* Main Panel: Image Stack + Overlay */}
             <div
                 ref={containerRef}
-                className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 aspect-square sm:aspect-video shadow-inner"
+                className="relative rounded-2xl overflow-hidden border border-slate-200 bg-slate-950 aspect-square shadow-inner"
                 style={{ maxHeight: "400px" }}
             >
                 {/* Images Stack for Cross-Fade */}
@@ -178,7 +178,7 @@ export default function NDVIImagePanel({
                         key={i}
                         src={`data:image/png;base64,${f.ndvi?.image_b64}`}
                         alt={`NDVI Frame ${i}`}
-                        className={`absolute inset-0 w-full h-full object-contain transition-opacity duration-700 ease-in-out ${i === selectedIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                        className={`absolute inset-0 w-full h-full object-fill transition-opacity duration-700 ease-in-out ${i === selectedIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                         style={{ 
                             imageRendering: "pixelated",
                             background: "#0f172a" 

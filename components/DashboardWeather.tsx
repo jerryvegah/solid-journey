@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { WeatherForecastResponse, DailyWeather } from '@/types/weather';
+import { checkIsRainy } from '@/lib/weather-logic';
+import { Sun, CloudRain } from 'lucide-react';
 
 interface DashboardWeatherProps {
   latitude: number;
@@ -105,6 +107,8 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
           }
           
           const isToday = index === 0;
+          const prevDay = index > 0 ? weatherData[index - 1] : undefined;
+          const isRainy = checkIsRainy(day, prevDay);
           
           return (
             <div 
@@ -122,7 +126,15 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
                 </span>
               </div>
               
-              <div className="mt-2 text-2xl md:text-3xl font-bold text-slate-800">
+              <div className="mt-3 mb-2">
+                {isRainy ? (
+                  <CloudRain size={32} className="text-blue-500" />
+                ) : (
+                  <Sun size={32} className="text-amber-500" />
+                )}
+              </div>
+
+              <div className="text-2xl md:text-3xl font-bold text-slate-800">
                 {Math.round(day.temperature_max)}°
               </div>
               <div className="text-sm text-slate-500 mb-3">
@@ -130,16 +142,20 @@ export default function DashboardWeather({ latitude, longitude, asl = 0 }: Dashb
               </div>
               
               <div className="grid grid-cols-2 gap-2 w-full pt-3 border-t border-slate-200/60">
-                <div className="flex items-center justify-center gap-1 text-xs font-medium text-blue-600" title="Precipitation Probability">
+                <div className="flex items-center justify-center gap-1 text-[10px] md:text-xs font-medium text-blue-600" title="Precipitation Probability">
                   💧 {day.precipitation_probability}%
                 </div>
-                <div className="flex items-center justify-center gap-1 text-xs font-medium text-slate-500" title="Precipitation Sum">
-                  🌧️ {day.precipitation_sum.toFixed(1)}mm
+                <div className="flex items-center justify-center gap-1 text-[10px] md:text-xs font-medium text-slate-500" title="Precipitation Sum">
+                  📏 {day.precipitation_sum.toFixed(1)}mm
                 </div>
+              </div>
+              <div className={`mt-2 text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${isRainy ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                {isRainy ? 'Rain' : 'Dry'}
               </div>
             </div>
           );
         })}
+
         {/* Spacer for end of scroll */}
         <div className="flex-shrink-0 w-4 h-full"></div>
       </div>

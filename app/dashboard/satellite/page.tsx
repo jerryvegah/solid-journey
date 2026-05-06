@@ -14,10 +14,11 @@ import {
 } from 'chart.js';
 import { collection, doc, getDoc, getDocs, query, serverTimestamp, updateDoc, where } from 'firebase/firestore';
 import 'leaflet/dist/leaflet.css';
-import { Activity, AlertTriangle, CreditCard, Download, Droplets, Eye, Layers, Lock, MapPin, Satellite, Thermometer, TrendingUp, Wind, X } from 'lucide-react';
+import { Activity, AlertTriangle, CloudRain, CreditCard, Download, Droplets, Eye, Layers, Lock, MapPin, Satellite, Sun, Thermometer, TrendingUp, Wind, X } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
+import { checkIsRainy } from '@/lib/weather-logic';
 
 // Register ChartJS
 ChartJS.register(
@@ -563,17 +564,19 @@ function ReportDetailsModal({ report, onClose, onViewFull }: { report: any, onCl
                             <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-7 gap-2 sm:gap-3">
                                 {forecast.slice(0, 14).map((day: any, i: number) => {
                                     const date = day.date ? new Date(day.date) : new Date();
+                                    const prevDay = i > 0 ? forecast[i - 1] : undefined;
+                                    const isRainy = checkIsRainy(day, prevDay);
                                     return (
                                         <div key={i} className="bg-white border rounded-xl p-2 sm:p-3 text-center">
                                             <p className="text-xs font-bold text-slate-500 mb-1">{date.toLocaleDateString('en-US', { weekday: 'short' })}</p>
                                             <div className="my-2 flex justify-center">
-                                                {(day.precipitation_sum || 0) > 0 ? <Droplets size={20} className="text-blue-500" /> : <Wind size={20} className="text-emerald-500" />}
+                                                {isRainy ? <CloudRain size={20} className="text-blue-500" /> : <Sun size={20} className="text-amber-500" />}
                                             </div>
                                             <div className="text-xs sm:text-sm font-bold">
                                                 {(day.temperature_max || 0).toFixed(0)}° <span className="text-slate-400 text-xs">/ {(day.temperature_min || 0).toFixed(0)}°</span>
                                             </div>
-                                            <p className="text-xs text-blue-500 mt-1 font-bold">
-                                                {(day.precipitation_sum || 0) > 1.9 ? "Rain today" : "Dry day"}
+                                            <p className={`text-[10px] mt-1 font-bold ${isRainy ? "text-blue-500" : "text-amber-500"}`}>
+                                                {isRainy ? "Rainy day" : "Dry day"}
                                             </p>
                                         </div>
                                     );

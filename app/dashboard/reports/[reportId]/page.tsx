@@ -16,12 +16,14 @@ import {
     Activity,
     AlertTriangle,
     ArrowLeft,
+    CloudRain,
     Download,
     Droplets,
     Landmark,
     MapPin,
     Printer,
     Satellite,
+    Sun,
     Thermometer,
     TrendingUp,
     Wind,
@@ -31,6 +33,7 @@ import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
 import NDVIImagePanel from '@/components/NDVIImagePanel';
+import { checkIsRainy } from '@/lib/weather-logic';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
@@ -461,19 +464,20 @@ export default function FullReportPage() {
                                 <div className="grid grid-cols-3 xs:grid-cols-4 sm:grid-cols-7 gap-2 sm:gap-3">
                                     {report.forecast.slice(0, 14).map((day: any, i: number) => {
                                         const date = new Date(day.date);
-                                        const rain = (day.precipitation_sum || 0) > 1.9;
+                                        const prevDay = i > 0 ? report.forecast[i - 1] : undefined;
+                                        const isRainy = checkIsRainy(day, prevDay);
                                         return (
                                             <div key={i} className="bg-slate-50 rounded-xl p-2 sm:p-4 text-center border border-slate-100 hover:border-emerald-200 transition-colors">
                                                 <p className="text-xs font-black text-slate-400 uppercase mb-2">
                                                     {date.toLocaleDateString('en-US', { weekday: 'short' })}
                                                 </p>
                                                 <div className="bg-white w-10 h-10 rounded-full flex items-center justify-center mx-auto mb-3 shadow-sm">
-                                                    {rain ? <Droplets size={20} className="text-blue-500" /> : <Wind size={20} className="text-emerald-500" />}
+                                                    {isRainy ? <CloudRain size={20} className="text-blue-500" /> : <Sun size={20} className="text-amber-500" />}
                                                 </div>
                                                 <p className="text-base font-black text-slate-800">{(day.temperature_max || 0).toFixed(0)}°</p>
                                                 <p className="text-xs text-slate-400 font-bold mb-2">/ {(day.temperature_min || 0).toFixed(0)}°</p>
-                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${rain ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                    {rain ? 'Rain' : 'Dry'}
+                                                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${isRainy ? 'bg-blue-100 text-blue-700' : 'bg-amber-100 text-amber-700'}`}>
+                                                    {isRainy ? 'Rain' : 'Dry'}
                                                 </span>
                                             </div>
                                         );

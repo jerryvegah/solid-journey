@@ -100,6 +100,10 @@ export default function SatelliteReportsPage() {
                     const data = doc.data();
 
                     // FIX: Extract REAL data from Firebase
+                    const satOuter = data.results?.satellite || {};
+                    const sat = satOuter.satellite || {};
+                    const intel = sat.intelligence || {};
+                    
                     const cropInfo = data.results?.satellite?.crop_info || {};
                     const riskAssessment = data.results?.risk_ml?.risk_assessment?.[data.cropType?.toUpperCase()] || {};
 
@@ -114,11 +118,11 @@ export default function SatelliteReportsPage() {
                         area: `${data.area_hectares?.toFixed(2) || '0.00'} hectares`,
                         monitoringType: data.satellite_monitoring_enabled ? "Satellite Monitoring" : "Manual Assessment",
                         plantedDate: data.datePlanted || "N/A",
-                        // FIX: Pull REAL data from Firebase
-                        stage: cropInfo.current_stage?.replace('_', ' ') || riskAssessment.growth_stage || "Unknown",
-                        daysAfterPlanting: cropInfo.current_das || (data.datePlanted ? Math.floor((new Date().getTime() - new Date(data.datePlanted).getTime()) / (1000 * 60 * 60 * 24)) : 0),
-                        expectedSeason: cropInfo.expected_season_length || 120,
-                        peakNDVI: cropInfo.expected_peak_ndvi?.toFixed(2) || "0.75",
+                        // Pull REAL data from deep intelligence block if available
+                        stage: intel.stage?.replace('_', ' ') || cropInfo.current_stage?.replace('_', ' ') || riskAssessment.growth_stage || "Unknown",
+                        daysAfterPlanting: intel.days_after_planting ?? cropInfo.current_das ?? (data.datePlanted ? Math.floor((new Date().getTime() - new Date(data.datePlanted).getTime()) / (1000 * 60 * 60 * 24)) : 0),
+                        expectedSeason: intel.expected_season_length || cropInfo.expected_season_length || 120,
+                        peakNDVI: sat.ndvi?.mean_ndvi?.toFixed(2) || cropInfo.expected_peak_ndvi?.toFixed(2) || "0.75",
                         riskLevel: riskAssessment.risk_level || "Unknown",
                         predictedYield: riskAssessment.predicted_yield?.predicted_yield_mt || null,
                         yieldPerHa: riskAssessment.predicted_yield?.yield_per_ha || null,

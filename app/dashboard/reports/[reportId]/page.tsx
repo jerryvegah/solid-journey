@@ -1,6 +1,8 @@
 "use client";
 
+import NDVIImagePanel from '@/components/NDVIImagePanel';
 import { db, useAuth } from '@/lib/firebase';
+import { checkIsRainy } from '@/lib/weather-logic';
 import {
     BarElement,
     CategoryScale,
@@ -11,29 +13,24 @@ import {
     Tooltip,
 } from 'chart.js';
 import { doc, getDoc } from 'firebase/firestore';
-import 'leaflet/dist/leaflet.css';
 import {
     Activity,
     AlertTriangle,
     ArrowLeft,
     CloudRain,
     Download,
-    Droplets,
     Landmark,
     MapPin,
     Printer,
     Satellite,
     Sun,
     Thermometer,
-    TrendingUp,
-    Wind,
+    TrendingUp
 } from 'lucide-react';
 import Link from 'next/link';
 import { useParams, useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { Bar } from 'react-chartjs-2';
-import NDVIImagePanel from '@/components/NDVIImagePanel';
-import { checkIsRainy } from '@/lib/weather-logic';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 

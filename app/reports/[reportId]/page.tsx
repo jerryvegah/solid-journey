@@ -318,6 +318,75 @@ export default function FullReportPage() {
     return (
         <div className="min-h-screen bg-[#F8FAFC] pb-24">
 
+            {/* Pristine Print Stylesheet */}
+            <style dangerouslySetInnerHTML={{ __html: `
+                @media print {
+                    /* Hide web-only elements */
+                    .print\\:hidden, 
+                    nav,
+                    .sticky,
+                    button,
+                    .max-w-xs {
+                        display: none !important;
+                    }
+
+                    /* Full width A4 layout */
+                    body, html, main {
+                        background: #ffffff !important;
+                        color: #0f172a !important;
+                        margin: 0 !important;
+                        padding: 0 !important;
+                        width: 100% !important;
+                    }
+
+                    main {
+                        max-width: 100% !important;
+                        padding: 10px !important;
+                        margin-top: 10px !important;
+                        display: block !important;
+                    }
+
+                    /* Force clean single column stacking for print */
+                    .grid {
+                        display: flex !important;
+                        flex-direction: column !important;
+                        gap: 20px !important;
+                    }
+
+                    .lg\\:col-span-2, .lg\\:col-span-1 {
+                        width: 100% !important;
+                        display: block !important;
+                    }
+
+                    /* Avoid awkward page breaks inside cards */
+                    .bg-white {
+                        break-inside: avoid !important;
+                        page-break-inside: avoid !important;
+                        border: 1px solid #e2e8f0 !important;
+                        border-radius: 16px !important;
+                        box-shadow: none !important;
+                        margin-bottom: 20px !important;
+                    }
+
+                    /* Ensure background colors are fully filled on paper */
+                    * {
+                        -webkit-print-color-adjust: exact !important;
+                        print-color-adjust: exact !important;
+                    }
+
+                    /* Keep text highly readable */
+                    h1, h2, h3, h4, p, span, td, th {
+                        color: #0f172a !important;
+                    }
+
+                    /* Explicitly optimize leaflet maps and charts for print */
+                    .leaflet-container {
+                        height: 350px !important;
+                        border-radius: 12px !important;
+                    }
+                }
+            `}} />
+
             {/* Nav */}
             <div className="bg-white border-b border-slate-200 sticky top-0 z-20 print:hidden">
                 <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
@@ -329,7 +398,13 @@ export default function FullReportPage() {
                         <button onClick={() => window.print()} className="flex items-center gap-1.5 px-3 sm:px-4 py-2 border border-slate-200 rounded-lg text-slate-600 font-bold hover:bg-slate-50 transition-all">
                             <Printer size={16} /><span className="hidden sm:inline">Print</span>
                         </button>
-                        <button className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-all">
+                        <button 
+                            onClick={() => {
+                                alert("Premium PDF Export\n\nTo export this satellite report as a professional PDF, simply choose 'Save as PDF' in the destination field of the print window that opens next.");
+                                window.print();
+                            }}
+                            className="flex items-center gap-1.5 px-3 sm:px-4 py-2 bg-emerald-600 text-white rounded-lg font-bold hover:bg-emerald-700 transition-all"
+                        >
                             <Download size={16} /><span className="hidden sm:inline">Export PDF</span>
                         </button>
                     </div>
@@ -552,9 +627,27 @@ export default function FullReportPage() {
                                         <span className="text-sm text-slate-500">Overall health</span>
                                         <span className={`text-xs font-black px-3 py-1 rounded-full capitalize ${healthBadge(report.overall.health)}`}>{report.overall.health?.replace('_', ' ')}</span>
                                     </div>
-                                    <div className="flex items-center justify-between">
-                                        <span className="text-sm text-slate-500">Confidence</span>
-                                        <span className="text-sm font-black text-slate-700 capitalize">{report.overall.confidence}</span>
+                                    <div className="flex flex-col gap-1.5 pt-1">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-sm text-slate-500">Model Confidence</span>
+                                            <span className={`text-xs font-black capitalize ${
+                                                report.overall.confidence?.toLowerCase() === 'high' ? 'text-emerald-600' :
+                                                report.overall.confidence?.toLowerCase() === 'medium' ? 'text-amber-500' : 'text-slate-500'
+                                            }`}>
+                                                {report.overall.confidence}
+                                            </span>
+                                        </div>
+                                        <div className="bg-slate-100 rounded-full h-1.5 w-full overflow-hidden flex gap-0.5">
+                                            <div className={`h-full rounded-l-full transition-all duration-500 ${
+                                                ['high', 'medium', 'low'].includes(report.overall.confidence?.toLowerCase() || '') ? 'bg-emerald-500' : 'bg-slate-300'
+                                            }`} style={{ width: '35%' }} />
+                                            <div className={`h-full transition-all duration-500 ${
+                                                ['high', 'medium'].includes(report.overall.confidence?.toLowerCase() || '') ? 'bg-emerald-500' : 'bg-slate-200'
+                                            }`} style={{ width: '45%' }} />
+                                            <div className={`h-full rounded-r-full transition-all duration-500 ${
+                                                (report.overall.confidence?.toLowerCase() || '') === 'high' ? 'bg-emerald-500' : 'bg-slate-200'
+                                            }`} style={{ width: '20%' }} />
+                                        </div>
                                     </div>
                                 </div>
                             </div>

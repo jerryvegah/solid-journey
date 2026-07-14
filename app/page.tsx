@@ -127,6 +127,15 @@ export default function LandingPage() {
 
   const t = translations[lang];
 
+  // Helper so language selection also closes the mobile slide-in menu.
+  // Previously only the #how / #packages links closed the menu; the
+  // language buttons and Sign In link did not, which left the full-screen
+  // mobile nav panel open with no way back to the page.
+  const handleLangChange = (newLang: string) => {
+    setLang(newLang);
+    setIsMenuOpen(false);
+  };
+
   return (
     <main className="min-h-screen bg-white font-sans text-slate-900">
       {/* HEADER */}
@@ -145,16 +154,16 @@ export default function LandingPage() {
             <a href="#how" className="text-slate-700 hover:text-emerald-600 font-semibold" onClick={() => setIsMenuOpen(false)}>{t.nav_how}</a>
             <a href="#packages" className="text-slate-700 hover:text-emerald-600 font-semibold" onClick={() => setIsMenuOpen(false)}>{t.nav_packages}</a>
             <div className="flex gap-2 text-sm border-x px-4">
-              <button onClick={() => setLang('en')} className={lang === 'en' ? 'text-emerald-600 font-bold' : 'text-slate-400'}>EN</button>
+              <button onClick={() => handleLangChange('en')} className={lang === 'en' ? 'text-emerald-600 font-bold' : 'text-slate-400'}>EN</button>
               <span className="text-slate-200">|</span>
-              <button onClick={() => setLang('fr')} className={lang === 'fr' ? 'text-emerald-600 font-bold' : 'text-slate-400'}>FR</button>
+              <button onClick={() => handleLangChange('fr')} className={lang === 'fr' ? 'text-emerald-600 font-bold' : 'text-slate-400'}>FR</button>
             </div>
-            <Link href="/signin" className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700 transition-all shadow-lg active:scale-95">
+            <Link href="/signin" className="bg-emerald-600 text-white px-6 py-2 rounded-lg font-bold hover:bg-emerald-700 transition-all shadow-lg active:scale-95" onClick={() => setIsMenuOpen(false)}>
               {t.nav_signin}
             </Link>
           </nav>
 
-          <button className="md:hidden text-2xl" onClick={() => setIsMenuOpen(!isMenuOpen)}>
+          <button className="md:hidden text-2xl relative z-[60]" onClick={() => setIsMenuOpen(!isMenuOpen)}>
             <i className={`fa-solid ${isMenuOpen ? 'fa-xmark' : 'fa-bars'}`}></i>
           </button>
         </div>

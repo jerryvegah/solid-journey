@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lustre. Jewelry with a point of view.",
-  description: "Thoughtful, everyday jewelry designed with intention.",
+  title: "NOOR / STUDIO - Objects for your orbit.",
+  description: "Uncommon jewelry objects made in small runs.",
   icons: {
     icon: "/favicon.png",
   },

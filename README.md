@@ -1,4 +1,11 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Lustre Jewelry Store
+
+Static jewelry storefront built with Next.js.
+
+- GitHub: [github.com/jerryvegah/solid-journey](https://github.com/jerryvegah/solid-journey)
+- Live site: [Vercel deployment](https://v0-jewlry-store-pilgrmz6h-jerry-vegahs-projects.vercel.app)
+
+This project uses [Next.js](https://nextjs.org).
 
 ## Getting Started
 
